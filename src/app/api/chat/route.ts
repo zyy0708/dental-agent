@@ -117,9 +117,19 @@ export async function POST(request: NextRequest) {
       }
 
       case 'collect_name': {
-        session.appointment.name = message.trim();
-        reply = `好的，${message.trim()}。请输入您的联系电话：`;
-        newState = 'collect_phone';
+        // 检查是否同时包含姓名和电话（如“张伟 13800138000”）
+        const phoneMatch = message.match(/1[3-9]\d{9}/);
+        if (phoneMatch) {
+          const name = message.replace(phoneMatch[0], '').trim();
+          session.appointment.name = name || '用户';
+          session.appointment.phone = phoneMatch[0];
+          reply = `好的，${session.appointment.name}，电话 ${phoneMatch[0]}。希望预约什么项目？\n1. 洗牙\n2. 牙齿矫正\n3. 种植牙\n4. 补牙\n5. 牙痛\n6. 其他`;
+          newState = 'collect_service';
+        } else {
+          session.appointment.name = message.trim();
+          reply = `好的，${message.trim()}。请输入您的联系电话：`;
+          newState = 'collect_phone';
+        }
         break;
       }
 
@@ -180,18 +190,26 @@ export async function POST(request: NextRequest) {
       }
 
       case 'completed': {
-        // 用户可能还想继续咨询
+        // 检测是否想重新预约
+        const bookingKeywords = ['预约', '约个时间', '挂号', '面诊', '再约', '重新预约'];
+        const wantsNewBooking = bookingKeywords.some(k => message.includes(k));
+        if (wantsNewBooking) {
+          reply = '好的，请问您怎么称呼？';
+          newState = 'collect_name';
+          break;
+        }
+        // 继续咨询
         const completion = await openai.chat.completions.create({
           model: MODEL,
           messages: [
-            { role: 'system', content: '用户已经完成预约。如果用户有新问题，简单回答并询问是否需要再次预约。保持简洁。' },
-            { role: 'user', content: message },
+            { role: 'system', content: '用户已经完成预约。简单回答用户的问题，保持简洁友好。如果用户想再次预约，引导他们重新预约。' },
+            ...session.messages.slice(-6),
           ],
           max_tokens: 200,
           temperature: 0.7,
         });
         reply = completion.choices[0]?.message?.content || '还有其他问题吗？';
-        newState = 'normal';
+        newState = 'completed';
         break;
       }
     }
