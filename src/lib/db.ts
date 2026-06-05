@@ -1,12 +1,11 @@
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  host: 'aws-0-ap-southeast-1.pooler.supabase.co',
+  host: '127.0.0.1',
   port: 5432,
-  database: 'postgres',
-  user: 'postgres.jewwtzhwgdvzbbjqfhfir',
-  password: 'BaiLuo0919',
-  ssl: { rejectUnauthorized: false },
+  database: 'dental_agent',
+  user: 'dental',
+  password: 'Dental@2024',
 });
 
 export default pool;
