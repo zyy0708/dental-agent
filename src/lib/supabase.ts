@@ -7,7 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 
 // 自定义 fetch，支持代理
-const customFetch = async (url: string, options: RequestInit = {}) => {
+const customFetch = async (url: RequestInfo | URL, options: RequestInit = {}): Promise<Response> => {
   if (proxyUrl) {
     const agent = new HttpsProxyAgent(proxyUrl);
     // 使用 undici 的 dispatcher 或 node-fetch 的 agent
