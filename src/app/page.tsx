@@ -70,7 +70,7 @@ export default function Home() {
             <p className="text-lg mb-2">您好，我是牙科预约助手</p>
             <p className="text-sm">可以咨询牙齿问题或直接预约医生</p>
             <div className="flex flex-wrap gap-2 mt-6 justify-center">
-              {['洗牙咨询', '牙齿矫正', '种植牙', '牙痛怎么办'].map((q) => (
+              {['洗牙咨询', '牙齿矫正', '种植牙', '牙痛怎么办', '预约登记'].map((q) => (
                 <button
                   key={q}
                   onClick={() => { setInput(q); }}
