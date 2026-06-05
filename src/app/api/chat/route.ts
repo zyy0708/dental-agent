@@ -91,30 +91,28 @@ export async function POST(request: NextRequest) {
     // 状态机处理
     switch (session.state) {
       case 'normal': {
+        // 检测用户是否表达预约意愿
+        const bookingKeywords = ['预约', '约个时间', '挂号', '面诊', '到店', '什么时候有空', '怎么收费', '多少钱', '想约', '想要预约'];
+        const userWantsBooking = bookingKeywords.some(k => message.includes(k));
+
+        if (userWantsBooking) {
+          // 用户表达了预约意愿，直接进入收集姓名状态
+          reply = '好的，请问您怎么称呼？';
+          newState = 'collect_name';
+          break;
+        }
+
         // 调用 AI
         const completion = await openai.chat.completions.create({
           model: MODEL,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            ...session.messages.slice(-10), // 只传最近10条
+            ...session.messages.slice(-10),
           ],
           max_tokens: 300,
           temperature: 0.7,
         });
         reply = completion.choices[0]?.message?.content || '抱歉，我没能理解您的意思。';
-
-        // 检测用户是否表达预约意愿（不要过早触发）
-        const bookingKeywords = ['预约', '约个时间', '挂号', '面诊', '到店', '什么时候有空', '怎么收费', '多少钱'];
-        const aiWantsBooking = reply.includes('怎么称呼') || reply.includes('预约');
-
-        // 只在用户明确表达预约意愿时，且AI已经在问名字时才进入收集状态
-        if (aiWantsBooking && (reply.includes('怎么称呼') || reply.includes('姓名'))) {
-          newState = 'collect_name';
-        }
-        // 用户主动表达预约意愿
-        if (bookingKeywords.some(k => message.includes(k))) {
-          // 不强制打断，让AI自然回复，但下次AI会更主动引导
-        }
         break;
       }
 
