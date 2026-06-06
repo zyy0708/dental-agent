@@ -62,7 +62,7 @@ export default function Home() {
             🦷
           </div>
           <div>
-            <h1 className="text-base font-semibold text-slate-800">牙科预约助手</h1>
+            <h1 className="text-base font-semibold text-slate-800">牙小助AI</h1>
             <p className="text-xs text-slate-400">在线咨询 · 快速预约</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
@@ -83,7 +83,7 @@ export default function Home() {
               </div>
               <h2 className="text-2xl font-bold text-slate-800 mb-2">您好，欢迎咨询</h2>
               <p className="text-slate-500 text-sm mb-8 text-center max-w-md leading-relaxed">
-                我是您的牙科健康顾问，可以为您解答牙齿问题、了解治疗方案、预约到店检查。
+                我是牙小助AI，可以为您解答牙齿问题、了解治疗方案、预约到店检查。
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-lg">
                 {[
