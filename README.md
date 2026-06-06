@@ -133,19 +133,78 @@ chatting ──(检测到预约意图)──→ collect_name
 
 ## 🚢 部署
 
+### 阿里云服务器（当前方案）
+
+- **服务器**：阿里云轻量应用服务器，Ubuntu 24.04，2 核 2G
+- **公网 IP**：`47.108.231.46`
+- **Web 服务器**：Nginx 反向代理
+- **进程管理**：PM2
+
+```bash
+# 1. 安装 Node.js 20+
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+sudo apt install -y nodejs
+
+# 2. 安装 PostgreSQL
+sudo apt install -y postgresql postgresql-contrib
+sudo systemctl enable postgresql
+
+# 3. 创建数据库和用户
+sudo -u postgres psql
+CREATE USER dental WITH PASSWORD 'your_password';
+CREATE DATABASE dental_agent OWNER dental;
+\q
+
+# 4. 初始化数据库
+psql -U dental -d dental_agent -f database.sql
+
+# 5. 部署项目
+git clone https://github.com/zyy0708/dental-agent.git
+cd dental-agent
+npm install
+cp .env.example .env.local  # 编辑填入实际配置
+npm run build
+
+# 6. PM2 启动
+npm install -g pm2
+pm2 start npm --name dental-agent -- start
+pm2 save
+pm2 startup
+
+# 7. Nginx 配置
+sudo apt install -y nginx
+```
+
+Nginx 配置示例（`/etc/nginx/sites-available/dental-agent`）：
+
+```nginx
+server {
+    listen 80;
+    server_name 47.108.231.46;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/dental-agent /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ### Vercel
 
 1. Push 代码到 GitHub
 2. 在 [Vercel](https://vercel.com) Import 项目
 3. 配置环境变量（DB 连接信息需改为云数据库地址）
 4. Deploy
-
-### 本地 / 服务器
-
-```bash
-npm run build
-npm run start
-```
 
 ## 📝 License
 
