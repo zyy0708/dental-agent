@@ -199,13 +199,6 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### Vercel
-
-1. Push 代码到 GitHub
-2. 在 [Vercel](https://vercel.com) Import 项目
-3. 配置环境变量（DB 连接信息需改为云数据库地址）
-4. Deploy
-
 ## 📝 License
 
 MIT
