@@ -1,7 +1,6 @@
-@import "tailwindcss";
-
-/* 确保 Tailwind 扫描所有源文件 */
-@source "../";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --background: #f8fafc;
@@ -30,10 +29,4 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
-}
-
-/* 输入框自适应高度 */
-textarea {
-  field-sizing: content;
-  max-height: 120px;
 }
