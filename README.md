@@ -1,74 +1,79 @@
-# 🦷 牙科诊所 AI 预约助手 MVP
+# 🦷 牙科诊所 AI 预约助手
 
-帮助牙科诊所将咨询用户转化为预约用户的 AI 聊天助手。
+将咨询用户转化为预约用户的 AI 聊天助手。基于小米 MiMo 大模型，模拟真人微信聊天风格，在对话中自动引导用户完成预约登记。
 
 ## ✨ 功能
 
-- AI 聊天咨询（基于小米 MiMo 大模型）
-- 自动识别咨询类型（洗牙、矫正、种植等）
-- 3 轮内推进预约
-- 用户信息收集（姓名、手机、项目、时间）
-- 后台查看预约记录
+- **AI 智能咨询** — 基于 MiMo 大模型，自然回答牙齿问题
+- **自动引导预约** — 识别用户预约意图，3 轮内完成信息收集
+- **信息收集流程** — 姓名 → 手机号 → 项目 → 到店时间，全自动引导
+- **快捷话术** — 首页提供常见问题快捷按钮，降低用户输入成本
+- **后台管理** — 密码登录，查看所有预约记录，支持状态筛选
 
 ## 🛠 技术栈
 
-- **前端**：Next.js 15 + TypeScript + TailwindCSS
-- **后端**：Next.js API Routes
-- **数据库**：Supabase PostgreSQL
-- **AI 模型**：小米 MiMo V2.5 Pro（OpenAI 兼容接口）
-- **部署**：Vercel
+| 层级 | 技术 |
+|------|------|
+| 前端 | Next.js 15 + React 19 + TypeScript + Tailwind CSS 4 |
+| 后端 | Next.js API Routes |
+| 数据库 | PostgreSQL（本地 / 云数据库） |
+| AI 模型 | 小米 MiMo V2.5 Pro（OpenAI 兼容接口） |
+| 部署 | Vercel / 本地 |
 
 ## 📦 安装
 
 ```bash
-# 克隆项目
-git clone <your-repo>
+git clone https://github.com/zyy0708/dental-agent.git
 cd dental-agent
-
-# 安装依赖
 npm install
 ```
 
 ## ⚙️ 环境变量
 
-复制 `.env.example` 为 `.env.local`，填入以下内容：
+复制 `.env.example` 为 `.env.local`，填入配置：
 
 ```env
-# MiMo API (OpenAI 兼容)
+# MiMo API
 OPENAI_API_KEY=your_api_key
 OPENAI_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 OPENAI_MODEL=mimo-v2.5-pro
 
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# PostgreSQL
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=dental_agent
+DB_USER=dental
+DB_PASSWORD=your_password
 
-# Admin 密码
+# Admin 后台密码
 ADMIN_PASSWORD=your_password
 ```
 
 ## 🗄 数据库初始化
 
-1. 登录 [Supabase](https://supabase.com)
-2. 进入你的项目
-3. 点击左侧菜单 **SQL Editor**
-4. 执行 `database.sql` 中的 SQL
+确保 PostgreSQL 已运行，创建数据库后执行初始化脚本：
 
-```sql
-CREATE TABLE IF NOT EXISTS appointments (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  phone text NOT NULL,
-  service_type text NOT NULL,
-  appointment_time text NOT NULL,
-  status text DEFAULT 'pending',
-  created_at timestamp with time zone DEFAULT now()
-);
+```bash
+# 创建数据库（如尚未创建）
+createdb dental_agent
 
-CREATE INDEX IF NOT EXISTS idx_appointments_created_at ON appointments (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments (status);
+# 执行初始化 SQL（在 psql 或任意 SQL 客户端中运行）
+psql -d dental_agent -f database.sql
 ```
+
+`database.sql` 会创建 `appointments` 表及索引，并插入测试数据。
+
+### 表结构
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 |
+| name | text | 患者姓名 |
+| phone | text | 手机号 |
+| service_type | text | 预约项目（洗牙/矫正/种植/补牙/牙痛/其他） |
+| appointment_time | text | 希望到店时间 |
+| status | text | 状态：pending / confirmed / cancelled |
+| created_at | timestamp | 创建时间 |
 
 ## 🚀 启动
 
@@ -76,9 +81,10 @@ CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments (status);
 npm run dev
 ```
 
-访问：
-- 首页：http://localhost:3000
-- 后台：http://localhost:3000/admin
+| 页面 | 地址 |
+|------|------|
+| 聊天首页 | http://localhost:3000 |
+| 管理后台 | http://localhost:3000/admin |
 
 ## 📁 项目结构
 
@@ -87,47 +93,59 @@ dental-agent/
 ├── src/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── chat/route.ts        # AI 聊天 API
-│   │   │   ├── appointment/route.ts  # 创建预约 API
-│   │   │   └── appointments/route.ts # 获取预约列表 API
-│   │   ├── admin/
-│   │   │   └── page.tsx              # 后台管理页面
-│   │   ├── page.tsx                  # 首页（聊天界面）
-│   │   ├── layout.tsx                # 布局
-│   │   └── globals.css               # 全局样式
+│   │   │   ├── chat/route.ts          # AI 聊天 + 预约收集状态机
+│   │   │   ├── appointment/route.ts    # 创建单条预约
+│   │   │   └── appointments/route.ts   # 获取预约列表（需密码）
+│   │   ├── admin/page.tsx              # 后台管理页面
+│   │   ├── page.tsx                    # 聊天首页
+│   │   ├── layout.tsx                  # 全局布局
+│   │   └── globals.css                 # 全局样式
 │   └── lib/
-│       ├── openai.ts                 # OpenAI 客户端配置
-│       └── supabase.ts               # Supabase 客户端配置
-├── database.sql                      # 数据库初始化 SQL
-├── .env.local                        # 环境变量（不提交）
-├── README.md                         # 项目文档
+│       ├── openai.ts                   # OpenAI 客户端配置
+│       └── db.ts                       # PostgreSQL 连接池
+├── database.sql                        # 数据库初始化脚本
+├── .env.example                        # 环境变量模板
 ├── package.json
 └── tsconfig.json
 ```
 
-## 🤖 AI 行为规则
-
-- 优先推动用户预约
-- 简单回答（不超过 2 句话）
-- 3 轮内推进预约
-- 禁止长篇医学科普
-- 禁止诊断疾病
-
-## 📊 聊天状态机
+## 🤖 聊天状态机
 
 ```
-normal → collect_name → collect_phone → collect_service → collect_time → completed
-   ↑                                                                          │
-   └──────────────────────────────────────────────────────────────────────────┘
+chatting ──(检测到预约意图)──→ collect_name
+                                    │
+                                    ↓
+                              collect_phone
+                                    │
+                                    ↓
+                             collect_service
+                                    │
+                                    ↓
+                              collect_time ──→ 写入数据库 ──→ 回到 chatting
 ```
 
-## 🚢 部署到 Vercel
+**设计规则：**
+- 回答简短口语化（1-2 句），像微信聊天
+- 用户说"好的""嗯"时继续引导，不卡住
+- 用户直接发"姓名+手机号"时跳过收集步骤
+- 禁止长篇科普、禁止诊断疾病
+- 预约信息写入 PostgreSQL，后台可查看
+
+## 🚢 部署
+
+### Vercel
 
 1. Push 代码到 GitHub
-2. 登录 [Vercel](https://vercel.com)
-3. Import 项目
-4. 配置环境变量
-5. Deploy
+2. 在 [Vercel](https://vercel.com) Import 项目
+3. 配置环境变量（DB 连接信息需改为云数据库地址）
+4. Deploy
+
+### 本地 / 服务器
+
+```bash
+npm run build
+npm run start
+```
 
 ## 📝 License
 
