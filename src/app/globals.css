@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* 确保 Tailwind 扫描所有源文件 */
+@source "../";
+
 :root {
   --background: #f8fafc;
   --foreground: #1e293b;
