@@ -196,27 +196,28 @@ export default function Home() {
                   <div className="text-center pt-4 md:pt-8 pb-6">
                     <div className="inline-flex w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl md:rounded-3xl flex items-center justify-center text-4xl md:text-5xl mb-4 md:mb-6 shadow-md ring-1 ring-slate-100">🦷</div>
                     <h3 className="text-xl md:text-2xl font-bold text-slate-950 mb-2 tracking-tight">
-                      欢迎使用 <span className="text-sky-600">牙小助 AI</span>
+                      您好，我是 <span className="text-sky-600">牙小助</span>
                     </h3>
                     <p className="text-slate-500 text-xs md:text-sm mb-8 md:mb-12 max-w-md leading-relaxed mx-auto px-2">
-                      您可以向我咨询牙痛紧急处理、牙齿矫正方案、洗牙或种植牙相关的专业医学建议。
+                      拥有20年口腔临床经验的AI医生，可以为您分析症状、初步诊断、推荐附近优质医院并协助预约就诊。
                     </p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 w-full max-w-2xl mx-auto">
                       {[
-                        { icon: '🪥', title: '洗牙咨询' },
-                        { icon: '😁', title: '牙齿矫正' },
-                        { icon: '🦷', title: '种植牙修复' },
-                        { icon: '💊', title: '牙痛急救' },
-                        { icon: '✨', title: '牙齿美白' },
-                        { icon: '📅', title: '预约检查' },
+                        { icon: '🔍', title: '症状分析', desc: '描述不适，获取专业判断' },
+                        { icon: '🏥', title: '推荐医院', desc: '根据病情匹配优质医院' },
+                        { icon: '📅', title: '预约挂号', desc: '一键预约，免去排队' },
+                        { icon: '💊', title: '牙痛咨询', desc: '急性牙痛快速缓解建议' },
+                        { icon: '😁', title: '矫正方案', desc: '了解适合的正畸方案' },
+                        { icon: '✨', title: '美学修复', desc: '美白、贴面方案咨询' },
                       ].map((item) => (
                         <button
                           key={item.title}
-                          onClick={() => setInput(item.title)}
+                          onClick={() => setInput(item.desc)}
                           className="bg-white border border-slate-100 hover:border-sky-200 rounded-xl md:rounded-2xl p-3.5 md:p-4 text-left transition-all hover:shadow-md active:scale-[0.98]"
                         >
                           <span className="text-2xl block mb-2">{item.icon}</span>
                           <span className="text-xs md:text-sm font-bold text-slate-800 block tracking-tight">{item.title}</span>
+                          <span className="text-[10px] md:text-xs text-slate-400 block mt-0.5">{item.desc}</span>
                         </button>
                       ))}
                     </div>
@@ -501,7 +502,7 @@ export default function Home() {
   // ========== 头部标题 ==========
   const getHeaderTitle = () => {
     switch (activeNav) {
-      case 'chat': return '护齿咨询工作台';
+      case 'chat': return '牙科AI医生';
       case 'appointments': return '我的预约';
       case 'profile': return '患者档案';
       case 'data': return '护齿数据';
@@ -511,7 +512,7 @@ export default function Home() {
 
   const getHeaderDesc = () => {
     switch (activeNav) {
-      case 'chat': return '由牙小助 AI 提供实时牙科健康支持';
+      case 'chat': return '症状分析 · 医院推荐 · 在线预约';
       case 'appointments': return '查看和管理您的预约记录';
       case 'profile': return '查看您的个人信息';
       case 'data': return '查看您的护齿健康数据';
