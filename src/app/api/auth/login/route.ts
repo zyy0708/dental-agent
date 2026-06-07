@@ -25,11 +25,11 @@ export async function POST(request: NextRequest) {
     await updateLastLogin(user.id);
 
     // 生成 token
-    const token = signToken({ id: user.id, username: user.username, nickname: user.nickname });
+    const token = signToken({ id: user.id, username: user.username, nickname: user.nickname, role: user.role });
 
     const response = NextResponse.json({
       message: '登录成功',
-      user: { id: user.id, username: user.username, nickname: user.nickname },
+      user: { id: user.id, username: user.username, nickname: user.nickname, role: user.role },
     });
 
     response.cookies.set('auth_token', token, {

@@ -9,6 +9,7 @@ export interface UserPayload {
   id: number;
   username: string;
   nickname?: string;
+  role?: string;
 }
 
 // 密码哈希
@@ -50,6 +51,12 @@ export async function getCurrentUser(): Promise<UserPayload | null> {
 // 通过用户名查找用户
 export async function findUserByUsername(username: string) {
   const result = await query('SELECT * FROM users WHERE username = $1', [username]);
+  return result.rows[0] || null;
+}
+
+// 通过ID查找用户
+export async function findUserById(id: number) {
+  const result = await query('SELECT id, username, nickname, role FROM users WHERE id = $1', [id]);
   return result.rows[0] || null;
 }
 
