@@ -5,20 +5,30 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const specialty = searchParams.get('specialty');
+    const city = searchParams.get('city');
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    let sql = 'SELECT * FROM hospitals';
+    const conditions: string[] = [];
     const params: unknown[] = [];
 
-    if (specialty) {
-      sql += ' WHERE specialties::text ILIKE $1';
-      params.push(`%${specialty}%`);
+    if (city) {
+      params.push(city);
+      conditions.push(`city = $${params.length}`);
     }
 
-    sql += ' ORDER BY rating DESC LIMIT $' + (params.length + 1);
+    if (specialty) {
+      params.push(`%${specialty}%`);
+      conditions.push(`specialties::text ILIKE $${params.length}`);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(limit);
 
-    const result = await query(sql, params);
+    const result = await query(
+      `SELECT * FROM hospitals ${where} ORDER BY rating DESC LIMIT $${params.length}`,
+      params
+    );
+
     return NextResponse.json({ hospitals: result.rows });
   } catch (error) {
     console.error('Hospitals API error:', error);
