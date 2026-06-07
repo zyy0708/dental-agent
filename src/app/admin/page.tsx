@@ -134,7 +134,7 @@ export default function AdminPage() {
           <h2 className="text-xl font-bold text-slate-900 mb-2">需要管理员权限</h2>
           <p className="text-sm text-slate-500 mb-6">{error || '请使用管理员账户登录'}</p>
           <div className="flex gap-3 justify-center">
-            <button onClick={() => router.push('/login')} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">去登录</button>
+            <button onClick={() => router.push('/login?callback=/admin')} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">去登录</button>
             <button onClick={() => router.push('/')} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-colors">返回首页</button>
           </div>
         </div>

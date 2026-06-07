@@ -75,7 +75,7 @@ export default function Home() {
         throw new Error('未登录');
       })
       .then(data => setUser(data.user))
-      .catch(() => router.push('/login'))
+      .catch(() => router.push('/login?callback=/'))
       .finally(() => setAuthLoading(false));
   }, [router]);
 
@@ -119,7 +119,7 @@ export default function Home() {
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
+    router.push('/login?callback=/');
   };
 
   const sendMessage = async () => {
