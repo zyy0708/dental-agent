@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 // 定义消息类型
 interface Message {
@@ -9,7 +10,14 @@ interface Message {
   time?: string;
 }
 
-// 模拟侧边栏导航项
+// 定义用户类型
+interface User {
+  id: number;
+  username: string;
+  nickname?: string;
+}
+
+// 侧边栏导航项
 const navItems = [
   { icon: '➕', label: '新咨询', active: true },
   { icon: '📋', label: '我的预约', active: false },
@@ -19,13 +27,28 @@ const navItems = [
 ];
 
 export default function Home() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 模拟发送时间和生成 SessionId
   const [sessionId] = useState(() => `sess_${crypto.randomUUID().slice(0, 8)}`);
+
+  // 检查登录状态
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => {
+        if (res.ok) return res.json();
+        throw new Error('未登录');
+      })
+      .then(data => setUser(data.user))
+      .catch(() => router.push('/login'))
+      .finally(() => setAuthLoading(false));
+  }, [router]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -33,6 +56,11 @@ export default function Home() {
 
   const getCurrentTime = () => {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
   };
 
   const sendMessage = async () => {
@@ -45,7 +73,6 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // 此处保留您的原API调用逻辑
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,8 +84,7 @@ export default function Home() {
       if (data.reply) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply, time: getCurrentTime() }]);
       }
-    } catch (error) {
-      console.error('发送失败:', error);
+    } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '网络连接超时，请重试。', time: getCurrentTime() }]);
     } finally {
       setLoading(false);
@@ -72,13 +98,26 @@ export default function Home() {
     }
   };
 
+  // 加载中状态
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center font-sans">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg animate-pulse">
+            🦷
+          </div>
+          <p className="text-sm text-slate-500 font-medium">加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    // 使用深石板灰色作为背景，让内容区域更突出
     <div className="min-h-screen bg-slate-100 flex font-sans selection:bg-sky-100 selection:text-sky-900">
 
-      {/* 1. 全新侧边栏 (Sidebar Navigation) - 提升平台专业感 */}
+      {/* 1. 侧边栏 */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-4 shadow-[10px_0_15px_-5px_rgba(0,0,0,0.02)]">
-        {/* Logo 区域 */}
+        {/* Logo */}
         <div className="flex items-center gap-3 pb-6 mb-4 border-b border-slate-100">
           <div className="w-11 h-11 bg-slate-900 rounded-xl flex items-center justify-center text-white text-xl shadow-md">
             🦷
@@ -89,7 +128,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 导航项列表 */}
+        {/* 导航项 */}
         <nav className="flex-1 space-y-1.5">
           {navItems.map((item) => (
             <button
@@ -106,26 +145,57 @@ export default function Home() {
           ))}
         </nav>
 
-        {/* 底部：Session ID 展示和用户状态 */}
+        {/* 底部：Session + 用户信息 */}
         <div className="mt-auto pt-4 border-t border-slate-100 space-y-3">
           <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-xs text-slate-500 font-mono flex items-center justify-between">
             <span>Session:</span>
             <span className="text-slate-800">{sessionId}</span>
           </div>
-          <div className="flex items-center gap-3 bg-white px-1">
-            <div className="relative h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-white"></span>
-            </div>
-            <span className="text-xs font-bold text-slate-700">系统服务在线</span>
+
+          {/* 用户信息 + 下拉菜单 */}
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center text-sky-700 text-sm font-bold border border-sky-200">
+                {(user?.nickname || user?.username || '?')[0]}
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-semibold text-slate-800 truncate">{user?.nickname || user?.username}</p>
+                <p className="text-[10px] text-slate-400 font-medium">在线</p>
+              </div>
+              <svg className={`w-4 h-4 text-slate-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* 下拉菜单 */}
+            {showUserMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-50">
+                <div className="px-4 py-2 border-b border-slate-100">
+                  <p className="text-xs text-slate-400 font-medium">登录为</p>
+                  <p className="text-sm font-semibold text-slate-800">{user?.username}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  退出登录
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </aside>
 
-      {/* 2. 主内容区域 (Main Content Area) - 包含头部和聊天窗口 */}
+      {/* 2. 主内容区 */}
       <div className="flex-1 flex flex-col">
 
-        {/* 顶部面板头部 (Clean Header) */}
+        {/* 顶部头部 */}
         <header className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between shadow-[0_5px_15px_-5px_rgba(0,0,0,0.02)] sticky top-0 z-10">
           <div>
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">护齿咨询工作台</h2>
@@ -141,11 +211,11 @@ export default function Home() {
           </div>
         </header>
 
-        {/* 3. 聊天显示区域 (Chat Display Area) - 更严谨、清晰的信息层级 */}
+        {/* 3. 聊天区域 */}
         <main className="flex-1 overflow-y-auto bg-slate-50/50">
           <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
 
-            {/* 欢迎消息：功能建议块 (Refined Cards) */}
+            {/* 欢迎页 */}
             {messages.length === 0 && (
               <div className="text-center pt-8 pb-10">
                 <div className="inline-flex w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-5xl mb-6 shadow-xl ring-1 ring-slate-100">
@@ -158,7 +228,6 @@ export default function Home() {
                   无论您对牙齿健康、治疗方案或预约流程有何疑问，我都在此为您提供实时的智能咨询服务。
                 </p>
 
-                {/* 建议项 - 更多克制、更严谨的形状 */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-5 w-full max-w-3xl mx-auto px-4">
                   {[
                     { icon: '🪥', title: '洗牙咨询', desc: '定期洁牙建议' },
@@ -182,11 +251,9 @@ export default function Home() {
               </div>
             )}
 
-            {/* 消息列表：现代扁平化样式 (Structured Messages) */}
+            {/* 消息列表 */}
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : ''} animate-fade-in`}>
-
-                {/* AI 头像 - 移到消息内容旁边 */}
                 {msg.role === 'assistant' && (
                   <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white text-lg flex-shrink-0 mt-0.5 shadow">
                     🦷
@@ -201,12 +268,10 @@ export default function Home() {
                         : 'bg-white text-slate-800 rounded-tl-sm ring-1 ring-slate-100 shadow'
                     }`}
                   >
-                    {/* 使用 normal font-sans 弃用 pre */}
                     <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
                       {msg.content}
                     </p>
                   </div>
-                  {/* 发送时间戳 */}
                   {msg.time && (
                     <span className="text-[10px] text-slate-400 mt-1.5 font-medium tracking-tight">
                       {msg.role === 'user' ? '您' : '牙小助'} 于 {msg.time}
@@ -214,16 +279,15 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* 模拟用户头像 (User Avatar) */}
                 {msg.role === 'user' && (
                   <div className="w-10 h-10 bg-sky-100 rounded-xl border-2 border-sky-200 flex items-center justify-center text-sky-700 text-sm flex-shrink-0 font-bold shadow-inner">
-                    您
+                    {(user?.nickname || user?.username || '您')[0]}
                   </div>
                 )}
               </div>
             ))}
 
-            {/* 加载动画 (Clean Dots) */}
+            {/* 加载动画 */}
             {loading && (
               <div className="flex gap-4 animate-fade-in">
                 <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white text-lg flex-shrink-0 mt-0.5 shadow">
@@ -244,7 +308,7 @@ export default function Home() {
           </div>
         </main>
 
-        {/* 4. 底部输入区域 (Input Section) - 结构稳定、克制设计 */}
+        {/* 4. 输入区域 */}
         <footer className="bg-white border-t border-slate-100 sticky bottom-0 px-6 py-4 mt-auto">
           <div className="relative flex items-end gap-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5 shadow-inner focus-within:ring-2 focus-within:ring-sky-200 focus-within:bg-white transition-all duration-150">
             <textarea
@@ -261,7 +325,6 @@ export default function Home() {
               disabled={loading || !input.trim()}
               className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:cursor-not-allowed text-white rounded-lg px-4.5 py-2.5 transition-all active:scale-95 flex items-center justify-center h-10"
             >
-              {/* 发送图标 SVG */}
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                 <path d="M3.478 2.404a.75.75 0 00-.926.941l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.404z" />
               </svg>
