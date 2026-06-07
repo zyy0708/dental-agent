@@ -56,6 +56,15 @@ export default function Home() {
   // 统计相关状态
   const [chatCount, setChatCount] = useState(0);
 
+  // 修改密码弹窗
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
   const [sessionId] = useState(() => `sess_${crypto.randomUUID().slice(0, 8)}`);
 
   // ========== 认证 ==========
@@ -405,18 +414,65 @@ export default function Home() {
           <main className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
             <div className="max-w-2xl mx-auto">
               <h3 className="text-lg font-bold text-slate-900 mb-6">系统设置</h3>
+
+              {/* 修改密码弹窗 */}
+              {showPasswordModal && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); }}>
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                    <h4 className="text-lg font-bold text-slate-900 mb-4">修改密码</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">原密码</label>
+                        <input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} placeholder="请输入原密码" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300 transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">新密码</label>
+                        <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="至少6个字符" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300 transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">确认新密码</label>
+                        <input type="password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} placeholder="再次输入新密码" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300 transition-all" />
+                      </div>
+                      {passwordError && <p className="text-red-600 text-sm bg-red-50 rounded-xl px-4 py-2.5 font-medium">{passwordError}</p>}
+                      {passwordSuccess && <p className="text-emerald-600 text-sm bg-emerald-50 rounded-xl px-4 py-2.5 font-medium">{passwordSuccess}</p>}
+                      <div className="flex gap-2 pt-2">
+                        <button onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); }} className="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-colors">取消</button>
+                        <button
+                          onClick={async () => {
+                            setPasswordError(''); setPasswordSuccess('');
+                            if (!oldPassword || !newPassword) { setPasswordError('请填写所有字段'); return; }
+                            if (newPassword.length < 6) { setPasswordError('新密码至少需要6个字符'); return; }
+                            if (newPassword !== confirmNewPassword) { setPasswordError('两次输入的密码不一致'); return; }
+                            setPasswordLoading(true);
+                            try {
+                              const res = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldPassword, newPassword }) });
+                              const data = await res.json();
+                              if (!res.ok) { setPasswordError(data.error); return; }
+                              setPasswordSuccess('密码修改成功！');
+                              setOldPassword(''); setNewPassword(''); setConfirmNewPassword('');
+                            } catch { setPasswordError('网络错误'); } finally { setPasswordLoading(false); }
+                          }}
+                          disabled={passwordLoading}
+                          className="flex-1 bg-slate-900 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors disabled:opacity-50"
+                        >{passwordLoading ? '修改中...' : '确认修改'}</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-100">
                 {[
-                  { icon: '👤', label: '编辑个人资料', desc: '修改昵称和头像', action: () => {} },
-                  { icon: '🔔', label: '消息通知', desc: '管理推送和提醒', action: () => {} },
-                  { icon: '🔒', label: '修改密码', desc: '更新账户密码', action: () => {} },
-                  { icon: '🌙', label: '深色模式', desc: '即将推出', action: () => {} },
-                  { icon: '📄', label: '隐私政策', desc: '查看数据保护说明', action: () => {} },
-                  { icon: '❓', label: '帮助与反馈', desc: '联系客服支持', action: () => {} },
+                  { icon: '👤', label: '编辑个人资料', desc: '修改昵称和头像' },
+                  { icon: '🔔', label: '消息通知', desc: '管理推送和提醒' },
+                  { icon: '🔒', label: '修改密码', desc: '更新账户密码', onClick: () => setShowPasswordModal(true) },
+                  { icon: '🌙', label: '深色模式', desc: '即将推出' },
+                  { icon: '📄', label: '隐私政策', desc: '查看数据保护说明' },
+                  { icon: '❓', label: '帮助与反馈', desc: '联系客服支持' },
                 ].map((item, i) => (
                   <button
                     key={i}
-                    onClick={item.action}
+                    onClick={item.onClick}
                     className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors text-left"
                   >
                     <span className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-lg">{item.icon}</span>
