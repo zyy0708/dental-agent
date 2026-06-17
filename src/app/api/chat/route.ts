@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import openai, { MODEL } from '@/lib/openai';
 import { query } from '@/lib/db';
 
-// 聊天状态
-type ChatState = 'diagnosing' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
+// 导诊状态
+type ChatState = 'triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
 
 interface Hospital {
   id: number;
@@ -17,10 +17,17 @@ interface Hospital {
   city?: string;
 }
 
+interface TriageResult {
+  department: string;
+  confidence: number;
+  reason: string;
+  emergency: boolean;
+}
+
 interface SessionData {
   state: ChatState;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-  diagnosis: string;
+  triageResult: TriageResult | null;
   condition: string;
   userCity: string;
   recommendedHospitals: Hospital[];
@@ -46,69 +53,171 @@ function cleanExpiredSessions() {
   }
 }
 
-// 专业牙科 AI 医生 prompt
-const DOCTOR_PROMPT = `你是一位经验丰富的牙科AI医生"牙小助"，拥有20年口腔临床经验。
+// AI 导诊助手 系统提示词
+const TRIAGE_PROMPT = `角色定义
 
-## 你的专业能力
-- 口腔疾病诊断：龋齿、牙周病、牙髓炎、智齿冠炎、口腔溃疡等
-- 牙齿修复方案：种植牙、烤瓷牙、牙贴面、嵌体修复
-- 正畸方案：传统矫正、隐形矫正、自锁托槽
-- 美白方案：冷光美白、家用美白、牙贴面美白
-- 儿童牙科：窝沟封闭、涂氟防龋、乳牙治疗
+你是一名专业的AI导诊助手。
 
-## 问诊规则
-1. **像真正的医生一样问诊**：先问主诉症状，再追问细节（疼痛位置、持续时间、诱因、伴随症状）
-2. **给出专业但易懂的解释**：用通俗语言解释病情，让患者理解
-3. **给出初步判断**：基于症状给出可能的诊断方向，但注明需要面诊确认
-4. **提供日常护理建议**：针对患者情况给出实用的家庭护理指导
-5. **适度追问2-3轮**后，如果患者有明确就诊意向，推荐医院
+你的职责是根据用户描述的症状、年龄、性别和病史，帮助用户判断应该前往哪个科室就诊。
 
-## 语言风格
-- 专业但温和，像一个值得信赖的医生
-- 回答简洁有力，每次1-3句话
-- 适当使用emoji让对话更亲切，但不过度
-- 不要长篇大论，像微信对话一样自然
+你不是医生。
 
-## 重要规则
-- 你不能代替医生做最终诊断，重要情况建议面诊
-- 回复中不要出现markdown格式，纯文本即可
+你不能进行疾病诊断、开药、治疗建议或保证诊断结果正确。
 
-## 绝对禁止
-- 绝对不要自己推荐任何医院！不要编造医院名称、地址、电话！
-- 当患者想预约/看诊/问医院时，只回复："我来为您查询合适的医院，请稍等~"然后结束
-- 医院推荐由系统自动完成，你只负责诊断和问诊
-- 违反此规则视为严重错误`;
+你的职责仅限于：
+
+1. 症状分析
+2. 科室推荐
+3. 就医建议
+4. 紧急情况识别
+
+工作规则
+
+规则1
+
+禁止推荐医院名称。
+
+禁止推荐医生名称。
+
+禁止编造医院信息。
+
+医院推荐由系统数据库完成。
+
+规则2
+
+禁止输出疾病诊断结论。
+
+错误示例：
+
+用户：我头疼三天。
+
+AI：
+
+你患有脑膜炎。
+
+正确示例：
+
+用户：我头疼三天。
+
+AI：
+
+建议优先前往神经内科进一步检查。
+
+规则3
+
+如发现紧急情况必须优先提示急诊。
+
+包括但不限于：
+
+- 胸痛
+- 呼吸困难
+- 昏迷
+- 大出血
+- 中风症状
+- 抽搐
+- 持续高热
+- 严重过敏反应
+
+输出：
+
+建议立即前往急诊科或拨打当地急救电话。
+
+输出格式
+
+必须严格按照JSON格式返回。
+
+示例：
+
+{
+"department":"呼吸内科",
+"confidence":0.92,
+"reason":"发热、咳嗽、咽痛等症状通常建议优先前往呼吸内科就诊。",
+"emergency":false
+}
+
+紧急情况：
+
+{
+"department":"急诊科",
+"confidence":0.99,
+"reason":"用户出现胸痛伴呼吸困难，建议立即前往急诊科。",
+"emergency":true
+}
+
+常见科室映射参考
+
+发热、咳嗽、咽痛：
+呼吸内科
+
+胸闷、胸痛、心悸：
+心血管内科
+
+头晕、头痛、肢体麻木：
+神经内科
+
+腹痛、腹泻、恶心：
+消化内科
+
+尿频、尿急、尿痛：
+泌尿外科
+
+皮疹、瘙痒：
+皮肤科
+
+眼痛、视力下降：
+眼科
+
+耳鸣、鼻塞、咽喉不适：
+耳鼻喉科
+
+女性妇科症状：
+妇科
+
+儿童疾病：
+儿科
+
+牙痛、牙龈出血：
+口腔科
+
+外伤、骨折：
+骨科
+
+无法判断时：
+
+{
+"department":"全科医学科",
+"confidence":0.5,
+"reason":"症状信息不足，建议进一步补充症状描述。",
+"emergency":false
+}`;
+
+/** 症状关键词 → 口腔专科映射 */
+function mapConditionToSpecialties(condition: string): string[] {
+  const specialtyMap: Record<string, string[]> = {
+    '种植': ['种植牙'], '缺牙': ['种植牙'], '镶牙': ['种植牙'],
+    '矫正': ['牙齿矫正', '隐形矫正'], '龅牙': ['牙齿矫正'], '地包天': ['牙齿矫正'], '牙不齐': ['牙齿矫正'],
+    '美白': ['牙齿美白'], '黄牙': ['牙齿美白'], '牙黄': ['牙齿美白'],
+    '洗牙': ['洗牙'], '牙结石': ['洗牙'], '牙龈出血': ['牙周治疗', '洗牙'],
+    '牙痛': ['牙痛治疗', '根管治疗'], '牙疼': ['牙痛治疗', '根管治疗'], '牙髓炎': ['根管治疗'],
+    '补牙': ['补牙'], '蛀牙': ['补牙', '根管治疗'], '龋齿': ['补牙', '根管治疗'],
+    '拔牙': ['拔牙'], '智齿': ['拔牙', '口腔外科'],
+    '儿童': ['儿童牙科'], '小孩': ['儿童牙科'], '孩子': ['儿童牙科'],
+    '牙周': ['牙周治疗'], '牙松': ['牙周治疗'],
+    '贴面': ['牙贴面'], '美学': ['牙贴面', '牙齿美白'],
+  };
+
+  let matched: string[] = [];
+  for (const [keyword, specialties] of Object.entries(specialtyMap)) {
+    if (condition.includes(keyword)) matched.push(...specialties);
+  }
+  return matched.length > 0 ? [...new Set(matched)] : ['种植牙', '牙齿矫正', '补牙', '洗牙'];
+}
 
 // 根据症状和城市匹配医院
 async function recommendHospitals(condition: string, city: string): Promise<Hospital[]> {
   try {
-    // 从症状关键词映射到专科
-    const specialtyMap: Record<string, string[]> = {
-      '种植': ['种植牙'], '缺牙': ['种植牙'], '镶牙': ['种植牙'],
-      '矫正': ['牙齿矫正', '隐形矫正'], '龅牙': ['牙齿矫正'], '地包天': ['牙齿矫正'], '牙不齐': ['牙齿矫正'],
-      '美白': ['牙齿美白'], '黄牙': ['牙齿美白'], '牙黄': ['牙齿美白'],
-      '洗牙': ['洗牙'], '牙结石': ['洗牙'], '牙龈出血': ['牙周治疗', '洗牙'],
-      '牙痛': ['牙痛治疗', '根管治疗'], '牙疼': ['牙痛治疗', '根管治疗'], '牙髓炎': ['根管治疗'],
-      '补牙': ['补牙'], '蛀牙': ['补牙', '根管治疗'], '龋齿': ['补牙', '根管治疗'],
-      '拔牙': ['拔牙'], '智齿': ['拔牙', '口腔外科'],
-      '儿童': ['儿童牙科'], '小孩': ['儿童牙科'], '孩子': ['儿童牙科'],
-      '牙周': ['牙周治疗'], '牙松': ['牙周治疗'],
-      '贴面': ['牙贴面'], '美学': ['牙贴面', '牙齿美白'],
-    };
+    const matchedSpecialties = mapConditionToSpecialties(condition);
 
-    // 找匹配的专科
-    let matchedSpecialties: string[] = [];
-    for (const [keyword, specialties] of Object.entries(specialtyMap)) {
-      if (condition.includes(keyword)) {
-        matchedSpecialties.push(...specialties);
-      }
-    }
-    if (matchedSpecialties.length === 0) {
-      matchedSpecialties = ['种植牙', '牙齿矫正', '补牙', '洗牙'];
-    }
-    matchedSpecialties = [...new Set(matchedSpecialties)];
-
-    // 构建查询：城市 + 专科匹配
     const conditions: string[] = [];
     const params: unknown[] = [];
 
@@ -117,8 +226,7 @@ async function recommendHospitals(condition: string, city: string): Promise<Hosp
       conditions.push(`city = $${params.length}`);
     }
 
-    // 专科匹配条件
-    const specialtyConds = matchedSpecialties.map((s, i) => {
+    const specialtyConds = matchedSpecialties.map((s) => {
       params.push(`%${s}%`);
       return `specialties::text ILIKE $${params.length}`;
     });
@@ -126,8 +234,6 @@ async function recommendHospitals(condition: string, city: string): Promise<Hosp
 
     const sql = `SELECT * FROM hospitals WHERE ${conditions.join(' AND ')} ORDER BY rating DESC LIMIT 3`;
     const result = await query(sql, params);
-
-    // 如果当前城市没有匹配的医院，返回空
     return result.rows;
   } catch (error) {
     console.error('[HOSPITAL] Query error:', error);
@@ -147,9 +253,9 @@ export async function POST(request: NextRequest) {
 
     if (!sessions.has(sessionId)) {
       sessions.set(sessionId, {
-        state: 'diagnosing',
+        state: 'triage',
         messages: [],
-        diagnosis: '',
+        triageResult: null,
         condition: '',
         userCity: '',
         recommendedHospitals: [],
@@ -166,55 +272,97 @@ export async function POST(request: NextRequest) {
     let newState = session.state;
     let hospitals: Hospital[] = [];
 
-    console.log(`[DOC] sid=${sessionId.slice(0,8)} state=${session.state} msg="${message}"`);
+    console.log(`[TRIAGE] sid=${sessionId.slice(0, 8)} state=${session.state} msg="${message}"`);
 
     switch (session.state) {
 
-      // ========== 诊断阶段 ==========
-      case 'diagnosing': {
+      // ================================================================
+      // 导诊阶段 — AI 分析症状 → JSON 输出科室推荐
+      // ================================================================
+      case 'triage': {
         // 检测是否有预约/看诊意向
-        const bookingKeywords = ['预约', '挂号', '看诊', '面诊', '去医院', '想去看', '推荐医院', '哪家医院', '哪个医院', '去哪看', '怎么预约', '有医院', '找医院', '附近'];
-        const wantsBooking = bookingKeywords.some(k => message.includes(k));
+        const bookingKeywords = [
+          '预约', '挂号', '看诊', '面诊', '去医院', '想去看',
+          '推荐医院', '哪家医院', '哪个医院', '去哪看', '怎么预约',
+          '有医院', '找医院', '附近',
+        ];
+        const wantsBooking = bookingKeywords.some((k) => message.includes(k));
 
-        if (wantsBooking) {
-          // 提取症状关键词
-          const conditionKeywords = session.messages
-            .filter(m => m.role === 'user')
-            .map(m => m.content)
-            .join(' ');
-          session.condition = conditionKeywords;
-
-          // 先问城市
-          reply = '请问您在哪个城市？我为您推荐附近的优质口腔医院。';
-          newState = 'collect_city';
-          break;
+        // 如果已有导诊结果且是口腔科，用户确认 → 直接进预约流程
+        if (session.triageResult && session.triageResult.department === '口腔科' && !session.triageResult.emergency) {
+          const positiveKeywords = ['好', '嗯', '要', '可以', '行', '是的', '对', 'ok', '好的', '推荐', '预约', '看看', '去吧'];
+          if (positiveKeywords.some((k) => message.includes(k)) || wantsBooking) {
+            reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
+            newState = 'collect_city';
+            break;
+          }
         }
 
-        // 正常诊断对话
+        // 调用 AI 导诊（JSON 模式）
         const completion = await openai.chat.completions.create({
           model: MODEL,
           messages: [
-            { role: 'system', content: DOCTOR_PROMPT },
-            ...session.messages.slice(-12),
+            { role: 'system', content: TRIAGE_PROMPT },
+            ...session.messages.slice(-10),
           ],
           max_tokens: 300,
-          temperature: 0.6,
+          temperature: 0.3,
+          response_format: { type: 'json_object' },
         });
-        reply = completion.choices[0]?.message?.content || '';
-        if (!reply.trim()) {
-          reply = '您能再详细描述一下症状吗？比如疼痛位置、持续时间、是否有肿胀等。';
+
+        const rawContent = completion.choices[0]?.message?.content || '';
+        let triage: TriageResult;
+
+        try {
+          triage = JSON.parse(rawContent);
+        } catch {
+          reply = '您能再详细描述一下症状吗？比如哪里不舒服、持续多久了？';
+          break;
         }
 
-        // 安全检查：如果AI回复中包含医院名称但不在数据库中，替换为通用回复
-        const hospitalNames = ['医院', '诊所', '口腔中心', '齿科'];
-        const hasHospitalMention = hospitalNames.some(k => reply.includes(k));
-        if (hasHospitalMention && !reply.includes('系统') && !reply.includes('为您匹配')) {
-          reply = '根据您的描述，建议您尽快到专业口腔机构面诊确认。需要我为您推荐合适的医院吗？';
+        // 验证返回结构
+        if (!triage.department || typeof triage.emergency !== 'boolean') {
+          reply = '您能再详细描述一下症状吗？比如哪里不舒服、持续多久了？';
+          break;
+        }
+
+        session.triageResult = triage;
+
+        // 🚨 紧急情况
+        if (triage.emergency) {
+          reply = `⚠️ ${triage.reason}`;
+          break;
+        }
+
+        // 非紧急情况 — 根据科室路由
+        if (triage.department === '口腔科') {
+          // 收集症状信息供后续医院匹配
+          session.condition = session.messages
+            .filter((m) => m.role === 'user')
+            .map((m) => m.content)
+            .join(' ');
+
+          // 用户是否已表达预约意愿？
+          if (wantsBooking) {
+            reply = `${triage.reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
+            newState = 'collect_city';
+          } else {
+            reply = `${triage.reason}\n\n需要我为您推荐附近的口腔医院进行预约吗？`;
+            // 状态保持 triage，下次用户确认时走上面的口腔科确认分支
+          }
+        } else if (triage.department === '全科医学科' && triage.confidence < 0.6) {
+          // 信息不足，追问
+          reply = triage.reason;
+        } else {
+          // 非口腔科 → 给出科室建议，提示本系统专注于口腔
+          reply = `${triage.reason}\n\n由于本系统专注于口腔诊疗服务，建议您前往附近综合医院的相关科室就诊。如需口腔相关帮助，请随时告诉我。`;
         }
         break;
       }
 
-      // ========== 医院选择阶段 ==========
+      // ================================================================
+      // 医院选择
+      // ================================================================
       case 'recommend_hospital': {
         const numMatch = message.match(/^[1-3]$/);
         if (numMatch && session.recommendedHospitals.length > 0) {
@@ -228,13 +376,14 @@ export async function POST(request: NextRequest) {
             reply = '请输入有效的序号（1/2/3）。';
           }
         } else {
-          // 用户可能用文字描述偏好
           reply = '请回复医院序号（1/2/3）来选择，或者告诉我您的偏好，我重新推荐。';
         }
         break;
       }
 
-      // ========== 收集城市 ==========
+      // ================================================================
+      // 收集城市
+      // ================================================================
       case 'collect_city': {
         session.userCity = message.trim();
         hospitals = await recommendHospitals(session.condition, session.userCity);
@@ -249,12 +398,14 @@ export async function POST(request: NextRequest) {
           newState = 'recommend_hospital';
         } else {
           reply = `抱歉，暂时没有找到${session.userCity}的匹配医院数据。您可以换个城市试试，或者就近选择正规口腔医院就诊。`;
-          newState = 'diagnosing';
+          newState = 'triage';
         }
         break;
       }
 
-      // ========== 收集姓名 ==========
+      // ================================================================
+      // 收集姓名
+      // ================================================================
       case 'collect_name': {
         const phoneInName = message.match(/\b1\d{10}\b/);
         if (phoneInName) {
@@ -270,7 +421,9 @@ export async function POST(request: NextRequest) {
         break;
       }
 
-      // ========== 收集电话 ==========
+      // ================================================================
+      // 收集电话
+      // ================================================================
       case 'collect_phone': {
         const phoneMatch = message.match(/\b1\d{10}\b/);
         if (phoneMatch) {
@@ -283,7 +436,9 @@ export async function POST(request: NextRequest) {
         break;
       }
 
-      // ========== 收集时间 + 写入数据库 ==========
+      // ================================================================
+      // 收集时间 → 写入数据库
+      // ================================================================
       case 'collect_time': {
         session.appointment.appointment_time = message.trim();
         session.appointment.service_type = session.condition || '综合检查';
@@ -302,17 +457,20 @@ export async function POST(request: NextRequest) {
             ]
           );
           console.log(`[DB] ✅ 写入成功`);
-          reply = `✅ 预约登记成功！\n\n🏥 ${session.appointment.hospital_name || '待定'}\n👤 ${session.appointment.name}\n📱 ${session.appointment.phone}\n🦷 ${session.appointment.service_type}\n🕐 ${session.appointment.appointment_time}\n\n医院会尽快电话确认，请保持手机畅通。祝您早日康复！`;
-          newState = 'diagnosing';
+          reply = `✅ 预约登记成功！\n\n🏥 ${session.appointment.hospital_name || '待定'}\n👤 ${session.appointment.name}\n📞 ${session.appointment.phone}\n🦷 ${session.appointment.service_type}\n🕐 ${session.appointment.appointment_time}\n\n医院会尽快电话确认，请保持手机畅通。祝您早日康复！`;
+          newState = 'triage';
         } catch (dbError: unknown) {
           const errMsg = dbError instanceof Error ? dbError.message : String(dbError);
           console.error('[DB] ❌ 写入失败:', errMsg);
           reply = '抱歉，系统出了点问题，预约没提交成功。请稍后再试。';
-          newState = 'diagnosing';
+          newState = 'triage';
         }
+        // 清空预约临时数据
         session.appointment = {};
         session.selectedHospital = null;
         session.recommendedHospitals = [];
+        // 保留 triageResult 供后续使用（但清空也可以）
+        session.triageResult = null;
         break;
       }
     }
@@ -324,11 +482,12 @@ export async function POST(request: NextRequest) {
       reply,
       state: newState,
       hospitals: hospitals.length > 0 ? hospitals : undefined,
+      triageResult: session.triageResult,
     });
 
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    console.error('[DOC] Error:', errMsg);
+    console.error('[TRIAGE] Error:', errMsg);
     return NextResponse.json({ error: '服务器错误' }, { status: 500 });
   }
 }
