@@ -243,7 +243,17 @@ async function recommendHospitals(condition: string, city: string): Promise<Hosp
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, sessionId } = await request.json();
+    let message: string, sessionId: string;
+    try {
+      const body = await request.json();
+      message = body.message;
+      sessionId = body.sessionId;
+    } catch (parseErr: unknown) {
+      return NextResponse.json({
+        error: '请求体解析失败',
+        detail: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      }, { status: 400 });
+    }
 
     if (!message || !sessionId) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
