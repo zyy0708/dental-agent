@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       contentType,
       bodyPreview: body.substring(0, 500),
       bodyLength: body.length,
-      model,
+      model: MODEL,
       baseUrl,
       apiKeyPrefix: apiKey.substring(0, 8),
     });
