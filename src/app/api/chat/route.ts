@@ -299,18 +299,35 @@ export async function POST(request: NextRequest) {
         }
 
         // 调用 AI 导诊（JSON 模式）
-        const completion = await openai.chat.completions.create({
-          model: MODEL,
-          messages: [
-            { role: 'system', content: TRIAGE_PROMPT },
-            ...session.messages.slice(-10),
-          ],
-          max_tokens: 300,
-          temperature: 0.3,
-          response_format: { type: 'json_object' },
-        });
+        let rawContent = '';
+        try {
+          const completion = await openai.chat.completions.create({
+            model: MODEL,
+            messages: [
+              { role: 'system', content: TRIAGE_PROMPT },
+              ...session.messages.slice(-10),
+            ],
+            max_tokens: 300,
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+          });
+          rawContent = completion.choices[0]?.message?.content || '';
+        } catch {
+          // MiMo may not support response_format, fallback without it
+          console.log('[TRIAGE] response_format not supported, falling back');
+          const completion = await openai.chat.completions.create({
+            model: MODEL,
+            messages: [
+              { role: 'system', content: TRIAGE_PROMPT },
+              ...session.messages.slice(-10),
+            ],
+            max_tokens: 300,
+            temperature: 0.3,
+          });
+          rawContent = completion.choices[0]?.message?.content || '';
+        }
 
-        const rawContent = completion.choices[0]?.message?.content || '';
+
         let triage: TriageResult;
 
         try {
