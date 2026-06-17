@@ -300,46 +300,61 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 调用 AI 导诊（直接 fetch，避免 OpenAI SDK 的 JSON 解析限制）
+        // 调用 AI 导诊（直接 https.request，完全绕过 fetch）
         let rawContent = '';
         try {
-          const apiUrl = (process.env.OPENAI_BASE_URL || 'https://token-plan-cn.xiaomimimo.com/v1') + '/chat/completions';
           const apiKey = process.env.OPENAI_API_KEY || '';
-          console.log('[TRIAGE] calling MiMo API, key prefix:', apiKey.substring(0, 8));
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 15000);
-          const resp = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: MODEL,
-              messages: [
-                { role: 'system', content: TRIAGE_PROMPT },
-                ...session.messages.slice(-10),
-              ],
-              max_tokens: 300,
-              temperature: 0.3,
-            }),
-            signal: controller.signal,
+          const baseUrl = process.env.OPENAI_BASE_URL || 'https://token-plan-cn.xiaomimimo.com/v1';
+          const url = new URL(baseUrl + '/chat/completions');
+          const postData = JSON.stringify({
+            model: MODEL,
+            messages: [
+              { role: 'system', content: TRIAGE_PROMPT },
+              ...session.messages.slice(-10),
+            ],
+            max_tokens: 300,
+            temperature: 0.3,
           });
-          clearTimeout(timeout);
-          const body = await resp.text();
-          console.log('[TRIAGE] MiMo response status:', resp.status, 'body preview:', body.substring(0, 200));
-          if (!resp.ok) {
-            console.error('[TRIAGE] MiMo API error:', body);
-            reply = `系统暂时无法处理（${resp.status}），请稍后再试。`;
-            break;
-          }
+
+          const body = await new Promise<string>((resolve, reject) => {
+            const https = require('https');
+            const options = {
+              hostname: url.hostname,
+              port: 443,
+              path: url.pathname,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Length': Buffer.byteLength(postData),
+              },
+              timeout: 15000,
+            };
+            const req = https.request(options, (res: any) => {
+              let data = '';
+              res.on('data', (chunk: string) => { data += chunk; });
+              res.on('end', () => {
+                if (res.statusCode !== 200) {
+                  reject(new Error(`MiMo returned ${res.statusCode}: ${data.substring(0, 200)}`));
+                } else {
+                  resolve(data);
+                }
+              });
+            });
+            req.on('error', reject);
+            req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+            req.write(postData);
+            req.end();
+          });
+
           const json = JSON.parse(body);
           rawContent = json.choices?.[0]?.message?.content || '';
         } catch (apiError: unknown) {
           const errMsg = apiError instanceof Error ? apiError.message : String(apiError);
-          console.error('[TRIAGE] API call failed:', errMsg);
-          reply = '系统暂时无法处理，请稍后再试。';
-          break;
+          return NextResponse.json({
+            error: 'MiMo API call failed',
+            message: errMsg,
+          }, { status: 502 });
         }
 
         // 尝试从响应中提取 JSON（AI 可能在 JSON 前后添加文字）
