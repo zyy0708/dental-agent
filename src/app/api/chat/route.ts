@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 调用 AI 导诊（JSON 模式）
+        // 调用 AI 导诊（纯文本模式，MiMo 不支持 response_format）
         let rawContent = '';
         try {
           const completion = await openai.chat.completions.create({
@@ -309,22 +309,12 @@ export async function POST(request: NextRequest) {
             ],
             max_tokens: 300,
             temperature: 0.3,
-            response_format: { type: 'json_object' },
           });
           rawContent = completion.choices[0]?.message?.content || '';
-        } catch {
-          // MiMo may not support response_format, fallback without it
-          console.log('[TRIAGE] response_format not supported, falling back');
-          const completion = await openai.chat.completions.create({
-            model: MODEL,
-            messages: [
-              { role: 'system', content: TRIAGE_PROMPT },
-              ...session.messages.slice(-10),
-            ],
-            max_tokens: 300,
-            temperature: 0.3,
-          });
-          rawContent = completion.choices[0]?.message?.content || '';
+        } catch (apiError: unknown) {
+          console.error('[TRIAGE] API call failed:', apiError);
+          reply = '系统暂时无法处理，请稍后再试。';
+          break;
         }
 
         // 尝试从响应中提取 JSON（AI 可能在 JSON 前后添加文字）
