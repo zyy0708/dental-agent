@@ -579,8 +579,8 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white text-lg shadow-md">🦷</div>
             <div>
-              <h1 className="text-base font-extrabold text-slate-950 tracking-tight">牙科 <span className="text-sky-600">导诊</span></h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI 导诊助手平台</p>
+              <h1 className="text-base font-extrabold text-slate-950 tracking-tight">Dental <span className="text-sky-600">Agent</span></h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">牙小助 AI 平台</p>
             </div>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition-colors">✕</button>
