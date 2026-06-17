@@ -243,7 +243,9 @@ async function recommendHospitals(condition: string, city: string): Promise<Hosp
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[CHAT] handler called');
     const { message, sessionId } = await request.json();
+    console.log('[CHAT] parsed body ok, message:', message?.substring(0, 20));
 
     if (!message || !sessionId) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
@@ -304,6 +306,8 @@ export async function POST(request: NextRequest) {
           const apiUrl = (process.env.OPENAI_BASE_URL || 'https://token-plan-cn.xiaomimimo.com/v1') + '/chat/completions';
           const apiKey = process.env.OPENAI_API_KEY || '';
           console.log('[TRIAGE] calling MiMo API, key prefix:', apiKey.substring(0, 8));
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
           const resp = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -319,8 +323,9 @@ export async function POST(request: NextRequest) {
               max_tokens: 300,
               temperature: 0.3,
             }),
-            cache: 'no-store',
+            signal: controller.signal,
           });
+          clearTimeout(timeout);
           const body = await resp.text();
           console.log('[TRIAGE] MiMo response status:', resp.status, 'body preview:', body.substring(0, 200));
           if (!resp.ok) {
