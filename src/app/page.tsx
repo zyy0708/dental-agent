@@ -54,7 +54,7 @@ export default function Home() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
 
   // 统计相关状态
-  const [chatCount, setChatCount] = useState(0);
+  const chatCount = messages.filter(m => m.role === 'user').length;
 
   // 修改密码弹窗
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -80,8 +80,9 @@ export default function Home() {
       .finally(() => setAuthLoading(false));
   }, [router]);
 
-  // ========== 加载聊天历史 ==========
+  // ========== 加载聊天历史（等 auth 完成后） ==========
   useEffect(() => {
+    if (!user) return;
     fetch('/api/chat')
       .then(res => res.ok ? res.json() : Promise.reject())
       .then(data => {
@@ -94,7 +95,7 @@ export default function Home() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [user]);
 
   // ========== 自动滚动 ==========
   useEffect(() => {
@@ -147,7 +148,6 @@ export default function Home() {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userContent, time: getCurrentTime() }]);
     setLoading(true);
-    setChatCount(prev => prev + 1);
 
     try {
       const res = await fetch('/api/chat', {
