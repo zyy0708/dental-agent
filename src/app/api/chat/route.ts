@@ -503,8 +503,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : String(error);
+    const errMsg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
     console.error('[TRIAGE] Error:', errMsg);
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 });
+    return NextResponse.json({ error: '服务器错误', detail: errMsg }, { status: 500 });
   }
 }
