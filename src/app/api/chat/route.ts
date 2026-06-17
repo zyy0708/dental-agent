@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import openai, { MODEL } from '@/lib/openai';
+import { MODEL } from '@/lib/openai';
 import { query } from '@/lib/db';
 
 // 导诊状态
@@ -298,21 +298,35 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 调用 AI 导诊（纯文本模式，MiMo 不支持 response_format）
+        // 调用 AI 导诊（直接 fetch，避免 OpenAI SDK 的 JSON 解析限制）
         let rawContent = '';
         try {
-          const completion = await openai.chat.completions.create({
-            model: MODEL,
-            messages: [
-              { role: 'system', content: TRIAGE_PROMPT },
-              ...session.messages.slice(-10),
-            ],
-            max_tokens: 300,
-            temperature: 0.3,
-          });
-          rawContent = completion.choices[0]?.message?.content || '';
+          const resp = await fetch(
+            (process.env.OPENAI_BASE_URL || 'https://token-plan-cn.xiaomimimo.com/v1') + '/chat/completions',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model: MODEL,
+                messages: [
+                  { role: 'system', content: TRIAGE_PROMPT },
+                  ...session.messages.slice(-10),
+                ],
+                max_tokens: 300,
+                temperature: 0.3,
+              }),
+            }
+          );
+          const body = await resp.text();
+          console.log('[TRIAGE] MiMo response status:', resp.status);
+          const json = JSON.parse(body);
+          rawContent = json.choices?.[0]?.message?.content || '';
         } catch (apiError: unknown) {
-          console.error('[TRIAGE] API call failed:', apiError);
+          const errMsg = apiError instanceof Error ? apiError.message : String(apiError);
+          console.error('[TRIAGE] API call failed:', errMsg);
           reply = '系统暂时无法处理，请稍后再试。';
           break;
         }
