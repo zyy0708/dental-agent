@@ -203,19 +203,19 @@ export default function Home() {
                   <div className="text-center pt-4 md:pt-8 pb-6">
                     <div className="inline-flex w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl md:rounded-3xl flex items-center justify-center text-4xl md:text-5xl mb-4 md:mb-6 shadow-md ring-1 ring-slate-100">🦷</div>
                     <h3 className="text-xl md:text-2xl font-bold text-slate-950 mb-2 tracking-tight">
-                      您好，我是 <span className="text-sky-600">牙小助</span>
+                      您好，我是 <span className="text-sky-600">AI导诊助手</span>
                     </h3>
                     <p className="text-slate-500 text-xs md:text-sm mb-8 md:mb-12 max-w-md leading-relaxed mx-auto px-2">
-                      拥有20年口腔临床经验的AI医生，可以为您分析症状、初步诊断、推荐附近优质医院并协助预约就诊。
+                      智能牙科导诊系统，帮您分析口腔症状、推荐就诊科室、匹配附近优质医院并协助预约。
                     </p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 w-full max-w-2xl mx-auto">
                       {[
-                        { icon: '🔍', title: '症状分析', desc: '描述不适，获取专业判断' },
-                        { icon: '🏥', title: '推荐医院', desc: '根据病情匹配优质医院' },
-                        { icon: '📅', title: '预约挂号', desc: '一键预约，免去排队' },
-                        { icon: '💊', title: '牙痛咨询', desc: '急性牙痛快速缓解建议' },
-                        { icon: '😁', title: '矫正方案', desc: '了解适合的正畸方案' },
-                        { icon: '✨', title: '美学修复', desc: '美白、贴面方案咨询' },
+                        { icon: '🦷', title: '症状导诊', desc: '描述不适，判断就诊科室' },
+                        { icon: '🏥', title: '推荐医院', desc: '根据病情匹配优质口腔医院' },
+                        { icon: '📋', title: '预约挂号', desc: '在线登记预约信息' },
+                        { icon: '⚠️', title: '紧急识别', desc: '胸痛等急症立即提示' },
+                        { icon: '🧑‍⚕️', title: '科室导航', desc: '非口腔症状导诊到对应科室' },
+                        { icon: '❓', title: '常见问题', desc: '导诊流程说明' },
                       ].map((item) => (
                         <button
                           key={item.title}
@@ -543,7 +543,7 @@ export default function Home() {
   // ========== 头部标题 ==========
   const getHeaderTitle = () => {
     switch (activeNav) {
-      case 'chat': return '牙科AI医生';
+      case 'chat': return 'AI导诊';
       case 'appointments': return '我的预约';
       case 'profile': return '患者档案';
       case 'data': return '护齿数据';
@@ -553,7 +553,7 @@ export default function Home() {
 
   const getHeaderDesc = () => {
     switch (activeNav) {
-      case 'chat': return '症状分析 · 医院推荐 · 在线预约';
+      case 'chat': return '症状分析 · 科室推荐 · 医院匹配';
       case 'appointments': return '查看和管理您的预约记录';
       case 'profile': return '查看您的个人信息';
       case 'data': return '查看您的护齿健康数据';
@@ -579,8 +579,8 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white text-lg shadow-md">🦷</div>
             <div>
-              <h1 className="text-base font-extrabold text-slate-950 tracking-tight">Dental <span className="text-sky-600">Agent</span></h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">牙小助 AI 平台</p>
+              <h1 className="text-base font-extrabold text-slate-950 tracking-tight">牙科 <span className="text-sky-600">导诊</span></h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI 导诊助手平台</p>
             </div>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition-colors">✕</button>
