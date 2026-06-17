@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MODEL } from '@/lib/openai';
+import openai, { MODEL } from '@/lib/openai';
 import { query } from '@/lib/db';
 
 // 导诊状态
@@ -243,9 +243,7 @@ async function recommendHospitals(condition: string, city: string): Promise<Hosp
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('[CHAT] handler called');
     const { message, sessionId } = await request.json();
-    console.log('[CHAT] parsed body ok, message:', message?.substring(0, 20));
 
     if (!message || !sessionId) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
@@ -300,76 +298,34 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 调用 AI 导诊（直接 https.request，完全绕过 fetch）
+        // 调用 AI 导诊（OpenAI SDK）
         let rawContent = '';
         try {
-          const apiKey = process.env.OPENAI_API_KEY || '';
-          const baseUrl = process.env.OPENAI_BASE_URL || 'https://token-plan-cn.xiaomimimo.com/v1';
-          const url = new URL(baseUrl + '/chat/completions');
-          const postData = JSON.stringify({
+          const completion = await openai.chat.completions.create({
             model: MODEL,
             messages: [
               { role: 'system', content: TRIAGE_PROMPT },
               ...session.messages.slice(-10),
             ],
-            max_tokens: 300,
+            max_tokens: 400,
             temperature: 0.3,
           });
-
-          const body = await new Promise<string>((resolve, reject) => {
-            const https = require('https');
-            const options = {
-              hostname: url.hostname,
-              port: 443,
-              path: url.pathname,
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Length': Buffer.byteLength(postData),
-              },
-              timeout: 15000,
-            };
-            const req = https.request(options, (res: any) => {
-              let data = '';
-              res.on('data', (chunk: string) => { data += chunk; });
-              res.on('end', () => {
-                if (res.statusCode !== 200) {
-                  reject(new Error(`MiMo returned ${res.statusCode}: ${data.substring(0, 200)}`));
-                } else {
-                  resolve(data);
-                }
-              });
-            });
-            req.on('error', reject);
-            req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-            req.write(postData);
-            req.end();
-          });
-
-          const json = JSON.parse(body);
-          rawContent = json.choices?.[0]?.message?.content || '';
+          rawContent = completion.choices[0]?.message?.content || '';
         } catch (apiError: unknown) {
           const errMsg = apiError instanceof Error ? apiError.message : String(apiError);
-          return NextResponse.json({
-            error: 'MiMo API call failed',
-            message: errMsg,
-          }, { status: 502 });
+          console.error('[TRIAGE] API call failed:', errMsg);
+          reply = '系统暂时无法处理，请稍后再试。';
+          break;
         }
 
-        // 尝试从响应中提取 JSON（AI 可能在 JSON 前后添加文字）
-        function extractJson(text: string): string {
-          const firstBrace = text.indexOf('{');
-          const lastBrace = text.lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace > firstBrace) {
-            return text.slice(firstBrace, lastBrace + 1);
-          }
-          return text;
+        // 从响应中提取 JSON（AI 可能在 JSON 前后添加文字）
+        const firstBrace = rawContent.indexOf('{');
+        const lastBrace = rawContent.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          rawContent = rawContent.slice(firstBrace, lastBrace + 1);
         }
-        rawContent = extractJson(rawContent);
 
         let triage: TriageResult;
-
         try {
           triage = JSON.parse(rawContent);
         } catch {
@@ -393,25 +349,20 @@ export async function POST(request: NextRequest) {
 
         // 非紧急情况 — 根据科室路由
         if (triage.department === '口腔科') {
-          // 收集症状信息供后续医院匹配
           session.condition = session.messages
             .filter((m) => m.role === 'user')
             .map((m) => m.content)
             .join(' ');
 
-          // 用户是否已表达预约意愿？
           if (wantsBooking) {
             reply = `${triage.reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
             newState = 'collect_city';
           } else {
             reply = `${triage.reason}\n\n需要我为您推荐附近的口腔医院进行预约吗？`;
-            // 状态保持 triage，下次用户确认时走上面的口腔科确认分支
           }
         } else if (triage.department === '全科医学科' && triage.confidence < 0.6) {
-          // 信息不足，追问
           reply = triage.reason;
         } else {
-          // 非口腔科 → 给出科室建议，提示本系统专注于口腔
           reply = `${triage.reason}\n\n由于本系统专注于口腔诊疗服务，建议您前往附近综合医院的相关科室就诊。如需口腔相关帮助，请随时告诉我。`;
         }
         break;
@@ -500,8 +451,6 @@ export async function POST(request: NextRequest) {
         session.appointment.appointment_time = message.trim();
         session.appointment.service_type = session.condition || '综合检查';
 
-        console.log(`[DB] INSERT:`, JSON.stringify(session.appointment));
-
         try {
           await query(
             'INSERT INTO appointments (name, phone, service_type, appointment_time, status) VALUES ($1, $2, $3, $4, $5)',
@@ -513,7 +462,6 @@ export async function POST(request: NextRequest) {
               'pending',
             ]
           );
-          console.log(`[DB] ✅ 写入成功`);
           reply = `✅ 预约登记成功！\n\n🏥 ${session.appointment.hospital_name || '待定'}\n👤 ${session.appointment.name}\n📞 ${session.appointment.phone}\n🦷 ${session.appointment.service_type}\n🕐 ${session.appointment.appointment_time}\n\n医院会尽快电话确认，请保持手机畅通。祝您早日康复！`;
           newState = 'triage';
         } catch (dbError: unknown) {
@@ -522,11 +470,9 @@ export async function POST(request: NextRequest) {
           reply = '抱歉，系统出了点问题，预约没提交成功。请稍后再试。';
           newState = 'triage';
         }
-        // 清空预约临时数据
         session.appointment = {};
         session.selectedHospital = null;
         session.recommendedHospitals = [];
-        // 保留 triageResult 供后续使用（但清空也可以）
         session.triageResult = null;
         break;
       }
@@ -543,8 +489,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: unknown) {
-    const errMsg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     console.error('[TRIAGE] Error:', errMsg);
-    return NextResponse.json({ error: '服务器错误', detail: errMsg }, { status: 500 });
+    return NextResponse.json({ error: '服务器错误' }, { status: 500 });
   }
 }
