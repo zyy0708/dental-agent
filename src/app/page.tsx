@@ -80,6 +80,22 @@ export default function Home() {
       .finally(() => setAuthLoading(false));
   }, [router]);
 
+  // ========== 加载聊天历史 ==========
+  useEffect(() => {
+    fetch('/api/chat')
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => {
+        if (data.messages && data.messages.length > 0) {
+          setMessages(data.messages.map((m: any) => ({
+            role: m.role,
+            content: m.content,
+            time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // ========== 自动滚动 ==========
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

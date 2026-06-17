@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import openai, { MODEL } from '@/lib/openai';
 import { query } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
 // 导诊状态
 type ChatState = 'triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
@@ -492,6 +493,16 @@ export async function POST(request: NextRequest) {
     session.state = newState;
     session.messages.push({ role: 'assistant', content: reply });
 
+    // 持久化聊天记录（异步，不阻塞响应）
+    getCurrentUser().then(user => {
+      if (user) {
+        query('INSERT INTO chat_history (user_id, role, content) VALUES ($1, $2, $3), ($4, $5, $6)', [
+          user.id, 'user', message.slice(0, 2000),
+          user.id, 'assistant', reply.slice(0, 2000),
+        ]).catch(e => console.error('[DB] chat history save error:', e.message));
+      }
+    }).catch(() => {});
+
     return NextResponse.json({
       reply,
       state: newState,
@@ -503,5 +514,30 @@ export async function POST(request: NextRequest) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error('[TRIAGE] Error:', errMsg);
     return NextResponse.json({ error: '服务器错误', detail: errMsg }, { status: 500 });
+  }
+}
+
+// 获取聊天历史
+async function getChatHistory(userId: number, limit = 50) {
+  const result = await query(
+    'SELECT role, content, created_at FROM chat_history WHERE user_id = $1 ORDER BY created_at ASC LIMIT $2',
+    [userId, limit]
+  );
+  return result.rows;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
+    const url = new URL(request.url);
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const history = await getChatHistory(user.id, Math.min(limit, 200));
+    return NextResponse.json({ messages: history });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
