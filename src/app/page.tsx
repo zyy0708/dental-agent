@@ -66,6 +66,7 @@ export default function Home() {
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   const [sessionId] = useState(() => `sess_${crypto.randomUUID().slice(0, 8)}`);
+  const [hospitals, setHospitals] = useState<any[] | null>(null);
 
   // ========== 认证 ==========
   useEffect(() => {
@@ -96,6 +97,7 @@ export default function Home() {
     setMessages([]);
     setActiveNav('chat');
     setIsSidebarOpen(false);
+    setHospitals(null);
   };
 
   // ========== 获取预约 ==========
@@ -140,6 +142,11 @@ export default function Home() {
       const data = await res.json();
       if (data.reply) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply, time: getCurrentTime() }]);
+      }
+      if (data.hospitals) {
+        setHospitals(data.hospitals);
+      } else {
+        setHospitals(null);
       }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '网络连接超时，请重试。', time: getCurrentTime() }]);
@@ -242,6 +249,40 @@ export default function Home() {
                     )}
                   </div>
                 ))}
+
+                {/* 医院推荐卡片 */}
+                {hospitals && hospitals.length > 0 && (
+                  <div className="space-y-3 max-w-3xl mx-auto">
+                    <p className="text-xs font-semibold text-slate-500 px-1">推荐医院：</p>
+                    {hospitals.map((h: any) => (
+                      <div key={h.id} className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-bold text-slate-900 truncate">{h.name}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">⭐ {h.rating} · {h.address}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">??? {h.hours}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">📞 {h.phone}</p>
+                          </div>
+                          {h.booking_url && (
+                            <a
+                              href={h.booking_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 bg-sky-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-sky-700 transition-colors shadow-sm flex items-center gap-1.5"
+                            >
+                              🏥 挂号
+                            </a>
+                          )}
+                        </div>
+                        {h.description && (
+                          <p className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-50">
+                            💡 {h.description}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {loading && (
                   <div className="flex gap-2.5 md:gap-4 animate-fade-in">

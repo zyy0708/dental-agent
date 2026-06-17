@@ -15,6 +15,7 @@ interface Hospital {
   hours: string;
   description: string;
   city?: string;
+  booking_url?: string;
 }
 
 interface TriageResult {
