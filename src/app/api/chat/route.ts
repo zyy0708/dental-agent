@@ -327,6 +327,16 @@ export async function POST(request: NextRequest) {
           rawContent = completion.choices[0]?.message?.content || '';
         }
 
+        // 尝试从响应中提取 JSON（AI 可能在 JSON 前后添加文字）
+        function extractJson(text: string): string {
+          const firstBrace = text.indexOf('{');
+          const lastBrace = text.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace > firstBrace) {
+            return text.slice(firstBrace, lastBrace + 1);
+          }
+          return text;
+        }
+        rawContent = extractJson(rawContent);
 
         let triage: TriageResult;
 
