@@ -301,27 +301,33 @@ export async function POST(request: NextRequest) {
         // 调用 AI 导诊（直接 fetch，避免 OpenAI SDK 的 JSON 解析限制）
         let rawContent = '';
         try {
-          const resp = await fetch(
-            (process.env.OPENAI_BASE_URL || 'https://token-plan-cn.xiaomimimo.com/v1') + '/chat/completions',
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-              },
-              body: JSON.stringify({
-                model: MODEL,
-                messages: [
-                  { role: 'system', content: TRIAGE_PROMPT },
-                  ...session.messages.slice(-10),
-                ],
-                max_tokens: 300,
-                temperature: 0.3,
-              }),
-            }
-          );
+          const apiUrl = (process.env.OPENAI_BASE_URL || 'https://token-plan-cn.xiaomimimo.com/v1') + '/chat/completions';
+          const apiKey = process.env.OPENAI_API_KEY || '';
+          console.log('[TRIAGE] calling MiMo API, key prefix:', apiKey.substring(0, 8));
+          const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: MODEL,
+              messages: [
+                { role: 'system', content: TRIAGE_PROMPT },
+                ...session.messages.slice(-10),
+              ],
+              max_tokens: 300,
+              temperature: 0.3,
+            }),
+            cache: 'no-store',
+          });
           const body = await resp.text();
-          console.log('[TRIAGE] MiMo response status:', resp.status);
+          console.log('[TRIAGE] MiMo response status:', resp.status, 'body preview:', body.substring(0, 200));
+          if (!resp.ok) {
+            console.error('[TRIAGE] MiMo API error:', body);
+            reply = `系统暂时无法处理（${resp.status}），请稍后再试。`;
+            break;
+          }
           const json = JSON.parse(body);
           rawContent = json.choices?.[0]?.message?.content || '';
         } catch (apiError: unknown) {
