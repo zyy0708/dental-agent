@@ -3,111 +3,163 @@
 import { useRouter } from 'next/navigation';
 
 const features = [
-  { icon: '🤖', title: 'AI 智能导诊', desc: '基于大语言模型，实时分析口腔症状，精准推荐就诊科室' },
-  { icon: '🏥', title: '医院匹配', desc: '根据您的症状和所在城市，智能推荐附近优质口腔医院' },
-  { icon: '📋', title: '在线预约', desc: '一键登记预约信息，医院电话确认，省时省心' },
-  { icon: '⚠️', title: '紧急识别', desc: '自动识别紧急医疗情况，第一时间提示急诊就医' },
-  { icon: '🔒', title: '隐私安全', desc: '数据加密存储，聊天记录安全保护，隐私无忧' },
-  { icon: '💬', title: '多轮对话', desc: '支持上下文记忆的多轮会话，像真人微信聊天一样自然' },
+  { icon: 'monitor_heart', title: '智能分诊', desc: 'AI 识别症状，快速推荐科室与处理路径。', color: 'text-blue-600', bg: 'bg-blue-50' },
+  { icon: 'event_available', title: '在线预约', desc: '支持一键挂号、预约时段管理与提醒。', color: 'text-sky-600', bg: 'bg-sky-50' },
+  { icon: 'folder_shared', title: '病历管理', desc: '统一记录历史问诊、就诊与随访信息。', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  { icon: 'local_hospital', title: '医院匹配', desc: '按症状、位置与服务能力智能匹配机构。', color: 'text-cyan-600', bg: 'bg-cyan-50' },
 ];
 
 export default function HomePage() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen relative overflow-hidden font-sans selection:bg-sky-100 selection:text-sky-900">
-      {/* 背景视频 — 全屏最前层 */}
+    <div className="min-h-screen relative overflow-hidden font-sans selection:bg-blue-100 selection:text-blue-900">
       <video className="bg-video" autoPlay loop muted playsInline>
         <source src="/background.mp4" type="video/mp4" />
       </video>
       <div className="bg-overlay" />
 
-      {/* 内容层 */}
       <div className="relative z-10 min-h-screen flex flex-col">
-
-        {/* 导航栏 */}
-        <nav className="flex items-center justify-between px-6 md:px-12 py-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl shadow-md border border-white/50">🦷</div>
-            <div>
-              <h1 className="text-base font-extrabold text-slate-900 tracking-tight">Dental <span className="text-sky-600">Agent</span></h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">牙小助 AI 平台</p>
+        <nav className="sticky top-0 z-50 bg-white/85 backdrop-blur-xl border-b border-slate-200/70 shadow-[0_8px_28px_rgba(15,23,42,0.04)]">
+          <div className="flex items-center justify-between max-w-7xl mx-auto px-4 md:px-8 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-gradient-to-br from-blue-600 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>dentistry</span>
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-slate-950 tracking-tight">DENTAL-AGENT</h1>
+                <p className="text-[11px] text-slate-500">Your Trusted Dental Partner</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
+
+            <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-700">
+              <button className="text-blue-700 border-b-2 border-blue-600 pb-1">Home</button>
+              <button className="hover:text-slate-950 transition-colors">Products</button>
+              <button className="hover:text-slate-950 transition-colors">Brands</button>
+              <button className="hover:text-slate-950 transition-colors">Solutions</button>
+              <button className="hover:text-slate-950 transition-colors">About Us</button>
+              <button className="hover:text-slate-950 transition-colors">Contact</button>
+            </div>
+
             <button
-              onClick={() => router.push('/login')}
-              className="bg-white/80 backdrop-blur-sm text-slate-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-white transition-all border border-white/50 shadow-sm"
+              onClick={() => router.push('/login?callback=/admin')}
+              className="btn-primary px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2"
             >
-              登录
-            </button>
-            <button
-              onClick={() => router.push('/register')}
-              className="bg-slate-900/90 backdrop-blur-sm text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-sm"
-            >
-              注册
+              <span className="material-symbols-outlined text-sm">mail</span>
+              Get in Touch
             </button>
           </div>
         </nav>
 
-        {/* Hero 区域 */}
-        <main className="flex-1 flex items-center justify-center px-6 md:px-12 py-12">
-          <div className="max-w-4xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 bg-sky-50/80 backdrop-blur-sm text-sky-700 px-4 py-2 rounded-full text-xs font-semibold mb-8 border border-sky-100/80">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-              </span>
-              AI 驱动 · 智能导诊 · 全程守护
+        <main className="relative">
+          <section className="max-w-7xl mx-auto px-4 md:px-8 pt-14 md:pt-20 pb-10 md:pb-14">
+            <div className="grid lg:grid-cols-[1.05fr_0.95fr] items-center gap-10 lg:gap-8 min-h-[680px]">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-2 bg-white/70 backdrop-blur-sm text-blue-700 px-4 py-2 rounded-full text-xs font-semibold mb-6 border border-white/70 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                  Intelligent Dental Care
+                </div>
+
+                <h2 className="text-5xl md:text-7xl font-black text-slate-950 leading-[0.95] tracking-tight">
+                  Your Trusted Partner
+                  <span className="block text-blue-600 mt-2">in Dental Solutions</span>
+                </h2>
+
+                <p className="mt-6 text-lg md:text-xl text-slate-600 leading-relaxed max-w-xl">
+                  AI 驱动的口腔健康平台，提供智能分诊、在线预约、病历管理与机构匹配。
+                </p>
+
+                <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={() => router.push('/login?callback=/chat')}
+                    className="btn-primary px-7 py-4 rounded-full text-base font-semibold flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-sm">shopping_bag</span>
+                    Explore Services
+                  </button>
+                  <button
+                    onClick={() => router.push('/login?callback=/admin')}
+                    className="btn-secondary px-7 py-4 rounded-full text-base font-semibold flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-sm">chat</span>
+                    Contact Us
+                  </button>
+                </div>
+
+                <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
+                  {[
+                    ['Trusted Quality', 'Certified & Reliable'],
+                    ['Global Support', 'Delivering Worldwide'],
+                    ['Professional Support', 'Here for Your Success'],
+                  ].map(([title, desc]) => (
+                    <div key={title} className="flex items-start gap-3 border-r border-slate-200 last:border-r-0 pr-3">
+                      <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-sm">check_circle</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{title}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="relative lg:pl-6">
+                <div className="relative rounded-[2rem] overflow-hidden shadow-[0_26px_70px_rgba(15,23,42,0.14)] border border-white/60 bg-white/35 backdrop-blur-sm">
+                  <div className="aspect-[1.08/1] min-h-[520px] bg-[linear-gradient(135deg,rgba(255,255,255,0.82),rgba(230,240,255,0.30))]">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.15),transparent_28%),radial-gradient(circle_at_80%_30%,rgba(14,165,233,0.10),transparent_25%),radial-gradient(circle_at_60%_80%,rgba(148,163,184,0.10),transparent_30%)]" />
+                    <div className="absolute inset-0 bg-[url('/background.mp4')] opacity-0" />
+                    <div className="absolute inset-0 flex items-end justify-end p-5">
+                      <div className="grid grid-cols-2 gap-3 w-full max-w-[420px]">
+                        <div className="glass rounded-2xl p-4 shadow-lg">
+                          <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+                            <span className="material-symbols-outlined">monitor_heart</span>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-900">AI 分析</p>
+                          <p className="text-xs text-slate-500 mt-1">快速判断症状</p>
+                        </div>
+                        <div className="glass rounded-2xl p-4 shadow-lg">
+                          <div className="w-11 h-11 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center mb-3">
+                            <span className="material-symbols-outlined">event_available</span>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-900">预约</p>
+                          <p className="text-xs text-slate-500 mt-1">在线登记信息</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <h2 className="text-4xl md:text-6xl font-extrabold text-slate-950 leading-tight mb-6 tracking-tight">
-              智能牙科<br />
-              <span className="text-sky-600">健康管理平台</span>
-            </h2>
-
-            <p className="text-slate-600 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-              基于 AI 大模型技术，为您提供专业的口腔症状分析、科室推荐、医院匹配和在线预约服务。像真人微信聊天一样，3 轮完成预约。
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
-                onClick={() => router.push('/login?callback=/chat')}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-2xl text-base font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center gap-2"
-              >
-                开始咨询
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path fillRule="evenodd" d="M12.97 3.97a.75.75 0 011.06 0l7.5 7.5a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 11-1.06-1.06l6.22-6.22H3a.75.75 0 010-1.5h16.19l-6.22-6.22a.75.75 0 010-1.06z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <button
-                onClick={() => router.push('/login?callback=/admin')}
-                className="bg-white/80 backdrop-blur-sm text-slate-700 px-8 py-4 rounded-2xl text-base font-semibold hover:bg-white transition-all border border-slate-200/80 shadow-sm flex items-center gap-2"
-              >
-                管理后台
-              </button>
-            </div>
-          </div>
+          </section>
         </main>
 
-        {/* 功能介绍 */}
-        <section className="px-6 md:px-12 pb-16">
-          <div className="max-w-5xl mx-auto">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {features.map((item) => (
-                <div key={item.title} className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-white/60 shadow-sm hover:shadow-md transition-all">
-                  <span className="text-3xl block mb-3">{item.icon}</span>
-                  <h3 className="text-sm font-bold text-slate-900 mb-1">{item.title}</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">{item.desc}</p>
+        <section className="px-4 md:px-8 pb-16 md:pb-20">
+          <div className="max-w-7xl mx-auto">
+            <h3 className="text-center text-3xl md:text-4xl font-bold text-slate-950 mb-10 tracking-tight">What We Provide</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {features.map((item, index) => (
+                <div
+                  key={item.title}
+                  className="bento-card group cursor-pointer animate-fade-in-up text-center"
+                  style={{ animationDelay: `${index * 100}ms`, minHeight: '260px' }}
+                >
+                  <div className={`w-16 h-16 rounded-full ${item.bg} flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform duration-300`}>
+                    <span className={`material-symbols-outlined text-3xl ${item.color}`}>{item.icon}</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-950 mb-3">{item.title}</h3>
+                  <p className="text-sm text-slate-500 leading-relaxed max-w-[240px] mx-auto">{item.desc}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* 底部 */}
-        <footer className="px-6 md:px-12 py-6 text-center">
-          <p className="text-[11px] text-slate-400 font-medium">牙小助 AI 平台 v1.0 · 隐私保护已开启 · AI 建议仅供参考</p>
+        <footer className="px-4 md:px-8 py-6 text-center border-t border-white/50 bg-white/25 backdrop-blur-sm">
+          <p className="text-xs text-slate-500 font-medium">
+            DENTAL-AGENT AI · 智能口腔健康平台 · AI 建议仅供参考
+          </p>
         </footer>
       </div>
     </div>

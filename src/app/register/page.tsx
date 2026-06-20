@@ -47,26 +47,26 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex font-sans selection:bg-sky-100 selection:text-sky-900">
-      {/* 左侧品牌区 */}
-      <div className="hidden lg:flex lg:w-1/2 bg-slate-900 flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-20 left-20 w-96 h-96 bg-sky-400 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-20 right-20 w-80 h-80 bg-indigo-400 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-[#f8f9ff] flex font-sans selection:bg-teal-100 selection:text-teal-900">
+      {/* Left Brand Section */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#1e293b] flex-col justify-between p-12 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 left-20 w-96 h-96 bg-teal-400 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-20 right-20 w-80 h-80 bg-blue-400 rounded-full blur-3xl"></div>
         </div>
 
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-12">
-            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shadow-lg">
-              🦷
+            <div className="w-12 h-12 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/20">
+              <span className="material-symbols-outlined text-white text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>dentistry</span>
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-white tracking-tight">Dental <span className="text-sky-400">Agent</span></h1>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">牙小助 AI 平台</p>
+              <h1 className="text-xl font-bold text-white tracking-tight">智齿管家</h1>
+              <p className="text-xs font-semibold text-teal-400 uppercase tracking-widest">Dental Agent AI</p>
             </div>
           </div>
 
-          <h2 className="text-4xl font-extrabold text-white leading-tight mb-6">
+          <h2 className="text-4xl font-bold text-white leading-tight mb-6">
             加入我们<br />开启智能护齿之旅
           </h2>
           <p className="text-slate-400 text-lg leading-relaxed max-w-md">
@@ -76,40 +76,41 @@ export default function RegisterPage() {
 
         <div className="relative z-10 space-y-4">
           {[
-            { icon: '🦷', text: '专业的 AI 牙科问诊服务' },
-            { icon: '📅', text: '便捷的在线预约管理系统' },
-            { icon: '📊', text: '完整的个人牙齿健康档案' },
+            { icon: 'smart_toy', text: '专业的 AI 牙科问诊服务' },
+            { icon: 'event_available', text: '便捷的在线预约管理系统' },
+            { icon: 'monitoring', text: '完整的个人牙齿健康档案' },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-3 text-slate-300">
-              <span className="text-lg">{item.icon}</span>
+              <span className="material-symbols-outlined text-teal-400">{item.icon}</span>
               <span className="text-sm">{item.text}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* 右侧注册表单 */}
+      {/* Right Register Form */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
-          {/* 移动端 Logo */}
+          {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-11 h-11 bg-slate-900 rounded-xl flex items-center justify-center text-white text-xl shadow-md">
-              🦷
+            <div className="w-11 h-11 bg-[#1e293b] rounded-xl flex items-center justify-center shadow-lg">
+              <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>dentistry</span>
             </div>
             <div>
-              <h1 className="text-lg font-extrabold text-slate-950 tracking-tight">Dental <span className="text-sky-600">Agent</span></h1>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">牙小助 AI 平台</p>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">智齿管家</h1>
+              <p className="text-xs font-semibold text-teal-600 uppercase tracking-widest">Dental Agent AI</p>
             </div>
           </div>
 
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-slate-950 tracking-tight">创建账户</h2>
-            <p className="text-sm text-slate-500 mt-1">注册后即可使用牙小助 AI 全部功能</p>
+            <p className="text-sm text-slate-500 mt-1">注册后即可使用智齿管家全部功能</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
+              <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2">
+                <span className="material-symbols-outlined text-lg">error</span>
                 {error}
               </div>
             )}
@@ -121,7 +122,7 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="3-20个字符"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300 transition-all"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300 transition-all"
                 required
                 minLength={3}
                 maxLength={20}
@@ -135,7 +136,7 @@ export default function RegisterPage() {
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="您希望我们怎么称呼您"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300 transition-all"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300 transition-all"
               />
             </div>
 
@@ -146,7 +147,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="至少6个字符"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300 transition-all"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300 transition-all"
                 required
                 minLength={6}
               />
@@ -159,7 +160,7 @@ export default function RegisterPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="再次输入密码"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300 transition-all"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300 transition-all"
                 required
               />
             </div>
@@ -167,7 +168,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl px-4 py-3 text-sm transition-all active:scale-[0.98] shadow-sm"
+              className="w-full btn-primary font-semibold rounded-xl px-4 py-3 text-sm disabled:opacity-50"
             >
               {loading ? '注册中...' : '注 册'}
             </button>
@@ -175,7 +176,7 @@ export default function RegisterPage() {
 
           <p className="text-center text-sm text-slate-500 mt-6">
             已有账户？{' '}
-            <Link href="/login" className="text-sky-600 hover:text-sky-700 font-semibold transition-colors">
+            <Link href="/login" className="text-teal-600 hover:text-teal-700 font-semibold transition-colors">
               立即登录
             </Link>
           </p>
