@@ -609,6 +609,12 @@ export default function Home() {
   return (
     <div className="h-screen bg-slate-100 flex overflow-hidden font-sans selection:bg-sky-100 selection:text-sky-900">
 
+      {/* 背景视频 */}
+      <video className="bg-video" autoPlay loop muted playsInline>
+        <source src="/background.mp4" type="video/mp4" />
+      </video>
+      <div className="bg-overlay" />
+
       {/* 遮罩层 */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300" onClick={() => setIsSidebarOpen(false)} />
@@ -616,7 +622,7 @@ export default function Home() {
 
       {/* 侧边栏 */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col p-4 shadow-2xl transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-50 w-64 bg-white/80 backdrop-blur-md border-r border-white/40 flex flex-col p-4 shadow-2xl transition-transform duration-300 ease-in-out
         md:static md:translate-x-0 md:shadow-[10px_0_15px_-5px_rgba(0,0,0,0.02)]
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
@@ -717,8 +723,8 @@ export default function Home() {
       </aside>
 
       {/* 主内容区 */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50">
-        <header className="bg-white border-b border-slate-100 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between shadow-[0_4px_12px_-5px_rgba(0,0,0,0.02)] z-10 shrink-0">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white/60 backdrop-blur-sm">
+        <header className="bg-white/80 backdrop-blur-md border-b border-white/40 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between shadow-[0_4px_12px_-5px_rgba(0,0,0,0.02)] z-10 shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
