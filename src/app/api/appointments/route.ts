@@ -5,7 +5,10 @@ export async function GET(request: NextRequest) {
   try {
     // 简单密码验证
     const authHeader = request.headers.get('authorization');
-    const adminPassword = process.env.ADMIN_PASSWORD || 'dental2026';
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      return NextResponse.json({ error: '服务端未配置管理员密码' }, { status: 500 });
+    }
 
     if (authHeader !== `Bearer ${adminPassword}`) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });

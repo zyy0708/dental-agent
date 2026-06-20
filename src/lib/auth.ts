@@ -3,7 +3,11 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { query } from './db';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dental-agent-jwt-secret-2024';
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET 环境变量未设置');
+  return secret;
+})();
 
 export interface UserPayload {
   id: number;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 // ========== 类型定义 ==========
@@ -65,8 +65,9 @@ export default function Home() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  const [sessionId] = useState(() => `sess_${crypto.randomUUID().slice(0, 8)}`);
+  const [sessionId, setSessionId] = useState(() => `sess_${crypto.randomUUID().slice(0, 8)}`);
   const [hospitals, setHospitals] = useState<any[] | null>(null);
+  const [sessions, setSessions] = useState<any[]>([]);
 
   // ========== 认证 ==========
   useEffect(() => {
@@ -80,13 +81,23 @@ export default function Home() {
       .finally(() => setAuthLoading(false));
   }, [router]);
 
-  // ========== 加载聊天历史（等 auth 完成后） ==========
-  useEffect(() => {
+  // ========== 加载会话列表和活跃会话消息 ==========
+  const loadSessions = useCallback(() => {
     if (!user) return;
-    fetch('/api/chat')
+    fetch('/api/chat?mode=sessions')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.sessions) setSessions(data.sessions);
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const loadMessages = useCallback((sid: string) => {
+    if (!user) return;
+    fetch('/api/chat?sessionId=' + encodeURIComponent(sid))
       .then(res => res.ok ? res.json() : Promise.reject())
       .then(data => {
-        if (data.messages && data.messages.length > 0) {
+        if (data.messages) {
           setMessages(data.messages.map((m: any) => ({
             role: m.role,
             content: m.content,
@@ -95,6 +106,11 @@ export default function Home() {
         }
       })
       .catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    loadSessions();
+    loadMessages(sessionId);
   }, [user]);
 
   // ========== 自动滚动 ==========
@@ -111,10 +127,21 @@ export default function Home() {
 
   // ========== 新咨询 ==========
   const startNewChat = () => {
+    const newId = `sess_${crypto.randomUUID().slice(0, 8)}`;
+    setSessionId(newId);
     setMessages([]);
     setActiveNav('chat');
     setIsSidebarOpen(false);
     setHospitals(null);
+  };
+
+  const switchSession = (sid: string) => {
+    setSessionId(sid);
+    setMessages([]);
+    setHospitals(null);
+    setActiveNav('chat');
+    setIsSidebarOpen(false);
+    setTimeout(() => loadMessages(sid), 0);
   };
 
   // ========== 获取预约 ==========

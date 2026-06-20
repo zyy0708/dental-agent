@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import openai, { MODEL } from '@/lib/openai';
 import { query } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { compressContext } from '@/lib/sub-agent';
 
 // 导诊状态
 type ChatState = 'triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
@@ -313,11 +314,14 @@ export async function POST(request: NextRequest) {
         // 调用 AI 导诊（OpenAI SDK）
         let rawContent = '';
         try {
+          // 使用子代理压缩上下文（当消息过多时）
+          const compressedMessages = await compressContext(session.messages, 8);
+
           const completion = await openai.chat.completions.create({
             model: MODEL,
             messages: [
               { role: 'system', content: TRIAGE_PROMPT },
-              ...session.messages.slice(-10),
+              ...compressedMessages,
             ],
             max_tokens: 400,
             temperature: 0.3,
@@ -496,9 +500,9 @@ export async function POST(request: NextRequest) {
     // 持久化聊天记录（异步，不阻塞响应）
     getCurrentUser().then(user => {
       if (user) {
-        query('INSERT INTO chat_history (user_id, role, content) VALUES ($1, $2, $3), ($4, $5, $6)', [
-          user.id, 'user', message.slice(0, 2000),
-          user.id, 'assistant', reply.slice(0, 2000),
+        query('INSERT INTO chat_history (user_id, session_id, role, content) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [
+          user.id, sessionId, 'user', message.slice(0, 2000),
+          user.id, sessionId, 'assistant', reply.slice(0, 2000),
         ]).catch(e => console.error('[DB] chat history save error:', e.message));
       }
     }).catch(() => {});
@@ -517,11 +521,33 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 获取聊天历史
-async function getChatHistory(userId: number, limit = 50) {
+// 获取聊天历史（按 session）
+async function getChatHistory(userId: number, sessionId?: string, limit = 50) {
+  if (sessionId) {
+    const result = await query(
+      'SELECT role, content, created_at FROM chat_history WHERE user_id = $1 AND session_id = $2 ORDER BY created_at ASC LIMIT $3',
+      [userId, sessionId, limit]
+    );
+    return result.rows;
+  }
   const result = await query(
     'SELECT role, content, created_at FROM chat_history WHERE user_id = $1 ORDER BY created_at ASC LIMIT $2',
     [userId, limit]
+  );
+  return result.rows;
+}
+
+// 获取会话列表
+async function getChatSessions(userId: number) {
+  const result = await query(
+    `SELECT session_id, MIN(created_at) as created_at,
+     (SELECT content FROM chat_history c2 WHERE c2.session_id = c1.session_id AND c2.role = 'user' ORDER BY c2.created_at ASC LIMIT 1) as first_msg
+     FROM chat_history c1
+     WHERE user_id = $1 AND session_id IS NOT NULL
+     GROUP BY session_id
+     ORDER BY MIN(created_at) DESC
+     LIMIT 50`,
+    [userId]
   );
   return result.rows;
 }
@@ -533,9 +559,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 });
     }
     const url = new URL(request.url);
+    const mode = url.searchParams.get('mode') || 'messages';
+    
+    if (mode === 'sessions') {
+      const sessions = await getChatSessions(user.id);
+      return NextResponse.json({ sessions });
+    }
+    
+    const sessionId = url.searchParams.get('sessionId') || undefined;
     const limit = parseInt(url.searchParams.get('limit') || '50');
-    const history = await getChatHistory(user.id, Math.min(limit, 200));
-    return NextResponse.json({ messages: history });
+    const messages = await getChatHistory(user.id, sessionId, Math.min(limit, 200));
+    return NextResponse.json({ messages });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: msg }, { status: 500 });
