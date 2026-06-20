@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import openai, { MODEL } from '@/lib/openai';
 import { query } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import { compressContext } from '@/lib/sub-agent';
+import { compressContext, detectUserIntent, generateClarifyingQuestion } from '@/lib/sub-agent';
 
 // 导诊状态
 type ChatState = 'triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
@@ -379,10 +379,21 @@ export async function POST(request: NextRequest) {
             reply = `${triage.reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
             newState = 'collect_city';
           } else {
-            reply = `${triage.reason}\n\n需要我为您推荐附近的口腔医院进行预约吗？`;
+            const intent = await detectUserIntent(message, session.condition);
+            if (intent.intent === 'booking_intent' && intent.confidence > 0.6) {
+              reply = `${triage.reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
+              newState = 'collect_city';
+            } else {
+              reply = `${triage.reason}\n\n需要我为您推荐附近的口腔医院进行预约吗？`;
+            }
           }
         } else if (triage.department === '全科医学科' && triage.confidence < 0.6) {
-          reply = triage.reason;
+          const intent = await detectUserIntent(message, session.messages.map(m => m.content).join(' '));
+          if (intent.intent === 'symptom_report' && intent.confidence > 0.6) {
+            reply = triage.reason;
+          } else {
+            reply = `${triage.reason}\n\n由于本系统专注于口腔诊疗服务，建议您前往附近综合医院的相关科室就诊。如需口腔相关帮助，请随时告诉我。`;
+          }
         } else {
           reply = `${triage.reason}\n\n由于本系统专注于口腔诊疗服务，建议您前往附近综合医院的相关科室就诊。如需口腔相关帮助，请随时告诉我。`;
         }
@@ -460,7 +471,7 @@ export async function POST(request: NextRequest) {
           reply = '收到！请问您希望什么时间就诊？（例如：6月10日下午3点）';
           newState = 'collect_time';
         } else {
-          reply = '手机号格式不对哦，请输入11位手机号（1开头）：';
+          reply = await generateClarifyingQuestion({ phone: true });
         }
         break;
       }
@@ -469,7 +480,13 @@ export async function POST(request: NextRequest) {
       // 收集时间 → 写入数据库
       // ================================================================
       case 'collect_time': {
-        session.appointment.appointment_time = message.trim();
+        const timeInput = message.trim();
+        const timePattern = /\d{1,2}[月日号时分下午上午早晚]+|\d{1,2}[:：]\d{2}/;
+        if (!timePattern.test(timeInput) && timeInput.length < 3) {
+          reply = await generateClarifyingQuestion({ time: true });
+          break;
+        }
+        session.appointment.appointment_time = timeInput;
         session.appointment.service_type = session.condition || '综合检查';
 
         try {
