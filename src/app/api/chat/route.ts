@@ -303,12 +303,18 @@ export async function POST(request: NextRequest) {
 
         // 如果已有导诊结果且是口腔科，用户确认 → 直接进预约流程
         if (session.triageResult && session.triageResult.department === '口腔科' && !session.triageResult.emergency) {
-          const positiveKeywords = ['好', '嗯', '要', '可以', '行', '是的', '对', 'ok', '好的', '推荐', '预约', '看看', '去吧'];
-          if (positiveKeywords.some((k) => message.includes(k)) || wantsBooking) {
+          const denied = ['不', '没', '别', '不用', '不要', '不需要', '不了', '算了', '再说'];
+          const isDenied = denied.some((k) => message.includes(k));
+          if (isDenied) break;
+
+          const positiveKeywords = ['好', '嗯', '要', '可以', '行', '是的', '对', 'ok', '好的', '推荐', '看看', '去吧'];
+          const isPositive = positiveKeywords.some((k) => message.includes(k)) || wantsBooking;
+          if (isPositive) {
             reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
             newState = 'collect_city';
             break;
           }
+        }
         }
 
         // 调用 AI 导诊（OpenAI SDK）

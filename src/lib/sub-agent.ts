@@ -4,12 +4,6 @@ interface MessageSummary {
   patientSymptom: string;
   suggestedDepartment: string;
   conversationKey: string;
-  userLocation: string;
-}
-
-interface ConversationState {
-  symptom: string;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 const SUMMARIZE_PROMPT = `你是一个医疗对话摘要专家。请分析以下对话历史，并以JSON格式输出关键信息：
