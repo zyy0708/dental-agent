@@ -315,7 +315,6 @@ export async function POST(request: NextRequest) {
             break;
           }
         }
-        }
 
         // 调用 AI 导诊（OpenAI SDK）
         let rawContent = '';
