@@ -15,7 +15,7 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callback = searchParams.get('callback') || '/';
+  const callback = searchParams.get('callback') || '/chat';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

@@ -135,7 +135,7 @@ export default function AdminPage() {
           <p className="text-sm text-slate-500 mb-6">{error || '请使用管理员账户登录'}</p>
           <div className="flex gap-3 justify-center">
             <button onClick={() => router.push('/login?callback=/admin')} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">去登录</button>
-            <button onClick={() => router.push('/')} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-colors">返回首页</button>
+            <button onClick={() => router.push('/chat')} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-colors">返回首页</button>
           </div>
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={fetchData} className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors">🔄 刷新</button>
-            <a href="/" className="bg-sky-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-sky-700 transition-colors">返回前台</a>
+            <a href="/chat" className="bg-sky-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-sky-700 transition-colors">返回前台</a>
           </div>
         </div>
       </header>
