@@ -81,7 +81,7 @@ export default function HomePage() {
                 </svg>
               </button>
               <button
-                onClick={() => router.push('/admin')}
+                onClick={() => router.push('/login?callback=/admin')}
                 className="bg-white/80 backdrop-blur-sm text-slate-700 px-8 py-4 rounded-2xl text-base font-semibold hover:bg-white transition-all border border-slate-200/80 shadow-sm flex items-center gap-2"
               >
                 管理后台

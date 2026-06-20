@@ -166,7 +166,7 @@ export default function Home() {
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login?callback=/chat');
+    router.push('/');
   };
 
   const sendMessage = async () => {
