@@ -49,9 +49,15 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex font-sans selection:bg-sky-100 selection:text-sky-900">
+    <div className="min-h-screen bg-slate-100 flex font-sans selection:bg-sky-100 selection:text-sky-900 relative">
+      {/* 背景视频 */}
+      <video className="bg-video" autoPlay loop muted playsInline>
+        <source src="/background.mp4" type="video/mp4" />
+      </video>
+      <div className="bg-overlay" />
+
       {/* 左侧品牌区 */}
-      <div className="hidden lg:flex lg:w-1/2 bg-slate-900 flex-col justify-between p-12 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-slate-900/80 backdrop-blur-md flex-col justify-between p-12 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
           <div className="absolute top-20 left-20 w-96 h-96 bg-sky-400 rounded-full blur-3xl"></div>
           <div className="absolute bottom-20 right-20 w-80 h-80 bg-indigo-400 rounded-full blur-3xl"></div>
@@ -91,7 +97,7 @@ function LoginForm() {
       </div>
 
       {/* 右侧登录表单 */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-8 bg-white/70 backdrop-blur-sm">
         <div className="w-full max-w-md">
           {/* 移动端 Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
