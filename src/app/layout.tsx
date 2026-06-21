@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "智齿管家 - AI智能口腔健康助手",
-  description: "智齿管家 - 您的智能牙科健康顾问，AI智能分诊，在线预约，病历管理",
+  title: "Dental Agent - AI智能口腔健康助手",
+  description: "AI驱动的口腔健康平台：智能分诊、在线预约、病历管理",
 };
 
 export default function RootLayout({
