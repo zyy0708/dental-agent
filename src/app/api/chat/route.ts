@@ -524,13 +524,15 @@ export async function POST(request: NextRequest) {
 
         try {
           await query(
-            'INSERT INTO appointments (name, phone, service_type, appointment_time, status) VALUES ($1, $2, $3, $4, $5)',
+            'INSERT INTO appointments (name, phone, service_type, appointment_time, status, lead_status, lead_source) VALUES ($1, $2, $3, $4, $5, $6, $7)',
             [
               session.appointment.name,
               session.appointment.phone,
               `${session.appointment.service_type} @ ${session.appointment.hospital_name || '待定'}`,
               session.appointment.appointment_time,
               'pending',
+              'pending_contact',
+              'chat',
             ]
           );
           reply = `✅ 预约登记成功！\n\n🏥 ${session.appointment.hospital_name || '待定'}\n👤 ${session.appointment.name}\n📞 ${session.appointment.phone}\n🦷 ${session.appointment.service_type}\n🕐 ${session.appointment.appointment_time}\n\n医院会尽快电话确认，请保持手机畅通。祝您早日康复！`;

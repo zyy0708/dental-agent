@@ -23,6 +23,23 @@ export async function POST() {
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} ${typ}`);
     }
 
+    // CRM fields for appointments
+    const crmCols = [
+      ['lead_status', "VARCHAR(20) DEFAULT 'pending_contact'"],
+      ['lead_source', "VARCHAR(20) DEFAULT 'chat'"],
+      ['follow_up_note', 'TEXT'],
+      ['next_follow_up_at', 'TIMESTAMP'],
+      ['deal_amount', 'NUMERIC'],
+      ['updated_at', 'TIMESTAMP DEFAULT now()'],
+    ];
+    for (const [col, typ] of crmCols) {
+      await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS ${col} ${typ}`);
+    }
+    await query("UPDATE appointments SET lead_status = 'pending_contact' WHERE lead_status IS NULL");
+    await query("UPDATE appointments SET lead_source = 'chat' WHERE lead_source IS NULL");
+    await query("UPDATE appointments SET updated_at = created_at WHERE updated_at IS NULL");
+    await query('CREATE INDEX IF NOT EXISTS idx_appointments_lead_status ON appointments(lead_status)');
+
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
