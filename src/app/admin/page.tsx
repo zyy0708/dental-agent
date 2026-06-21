@@ -24,9 +24,9 @@ const i18n: Record<Lang, any> = {
       id: 'ID', username: '用户名', nickname: '昵称', role: '角色', created: '注册时间', lastLogin: '最后登录',
       admin: '管理员', user: '用户', never: '从未',
     },
-    leads: {
-      title: '线索看板',
-      all: '全部', keyword: '搜索姓名/电话/项目',
+      leads: {
+        title: '线索看板', exportExcel: '导出 Excel',
+        all: '全部', keyword: '搜索姓名/电话/项目',
       total: '总线索', pending: '待联系', contacted: '已联系', visited: '已到诊',
       converted: '已成交', invalid: '无效', conversionRate: '转化率', dealAmount: '成交金额',
       avgDeal: '平均成交额', visitRate: '到诊率',
@@ -64,9 +64,9 @@ const i18n: Record<Lang, any> = {
       id: 'ID', username: 'Username', nickname: 'Nickname', role: 'Role', created: 'Created', lastLogin: 'Last Login',
       admin: 'Admin', user: 'User', never: 'Never',
     },
-    leads: {
-      title: 'Leads Board',
-      all: 'All', keyword: 'Search name/phone/service',
+      leads: {
+        title: 'Leads Board', exportExcel: 'Export Excel',
+        all: 'All', keyword: 'Search name/phone/service',
       total: 'Total Leads', pending: 'Pending Contact', contacted: 'Contacted', visited: 'Visited',
       converted: 'Converted', invalid: 'Invalid', conversionRate: 'Conversion Rate', dealAmount: 'Deal Amount',
       avgDeal: 'Avg Deal', visitRate: 'Visit Rate',
@@ -104,9 +104,9 @@ const i18n: Record<Lang, any> = {
       id: 'ID', username: 'ユーザー名', nickname: 'ニックネーム', role: '役割', created: '登録日', lastLogin: '最終ログイン',
       admin: '管理者', user: 'ユーザー', never: 'なし',
     },
-    leads: {
-      title: 'リードボード',
-      all: 'すべて', keyword: '名前/電話/項目を検索',
+      leads: {
+        title: 'リードボード', exportExcel: 'Excel エクスポート',
+        all: 'すべて', keyword: '名前/電話/項目を検索',
       total: '総リード', pending: '未対応', contacted: '対応済', visited: '来院済',
       converted: '成約', invalid: '無効', conversionRate: '成約率', dealAmount: '成約金額',
       avgDeal: '平均成約額', visitRate: '来院率',
@@ -570,6 +570,10 @@ export default function AdminPage() {
                   <option key={s} value={s}>{t.leads.statusLabels[s]}</option>
                 ))}
               </select>
+              <a href="/api/admin/leads/export"
+                className="btn-secondary px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs">file_download</span> {t.leads.exportExcel}
+              </a>
             </div>
 
             {loading ? (
