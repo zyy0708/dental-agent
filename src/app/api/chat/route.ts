@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { compressContext, detectUserIntent, generateClarifyingQuestion } from '@/lib/sub-agent';
 
 // 导诊状态
-type ChatState = 'triage' | 'post_triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
+type ChatState = 'triage' | 'post_triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time' | 'confirm_booking';
 
 interface Hospital {
   id: number;
@@ -35,6 +35,12 @@ interface SessionData {
   userCity: string;
   recommendedHospitals: Hospital[];
   selectedHospital: Hospital | null;
+  userProfile: {
+    nickname?: string;
+    phone?: string;
+    region?: string;
+    name?: string;
+  };
   appointment: {
     name?: string;
     phone?: string;
@@ -172,6 +178,7 @@ export async function POST(request: NextRequest) {
         userCity: '',
         recommendedHospitals: [],
         selectedHospital: null,
+        userProfile: {},
         appointment: {},
         lastActive: Date.now(),
       });
@@ -179,6 +186,28 @@ export async function POST(request: NextRequest) {
     const session = sessions.get(sessionId)!;
     session.lastActive = Date.now();
     session.messages.push({ role: 'user', content: message });
+
+    // 加载用户档案（首次进入时）
+    if (Object.keys(session.userProfile).length === 0) {
+      try {
+        const user = await getCurrentUser();
+        if (user) {
+          const result = await query(
+            'SELECT nickname, phone, region, username FROM users WHERE id = $1',
+            [user.id]
+          );
+          if (result.rows.length > 0) {
+            const row = result.rows[0];
+            session.userProfile = {
+              nickname: row.nickname || row.username,
+              phone: row.phone || '',
+              region: row.region || '',
+              name: row.nickname || row.username || '',
+            };
+          }
+        }
+      } catch {}
+    }
 
     let reply = '';
     let newState = session.state;
@@ -209,8 +238,25 @@ export async function POST(request: NextRequest) {
           const positiveKeywords = ['好', '嗯', '要', '可以', '行', '是的', '对', 'ok', '好的', '推荐', '看看', '去吧', '约'];
           const isPositive = positiveKeywords.some((k) => message.includes(k)) || wantsBooking;
           if (isPositive) {
-            reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
-            newState = 'collect_city';
+            // 自动用档案中的地区
+            if (session.userProfile.region) {
+              session.userCity = session.userProfile.region;
+              hospitals = await recommendHospitals(session.condition, session.userCity);
+              session.recommendedHospitals = hospitals;
+              if (hospitals.length > 0) {
+                reply = `为您找到了${session.userCity}的以下优质医院：\n\n`;
+                hospitals.forEach((h, i) => {
+                  reply += `${i + 1}. ${h.name}\n   ⭐ ${h.rating}分 · ${h.address}\n   🕐 ${h.hours}\n   📞 ${h.phone}\n   💡 ${h.description}\n\n`;
+                });
+                reply += '请问您想选择哪家医院？回复序号（1/2/3）即可。';
+                newState = 'recommend_hospital';
+              } else {
+                reply = `抱歉，暂时没有找到${session.userCity}的匹配医院数据。您可以换个城市试试。`;
+              }
+            } else {
+              reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
+              newState = 'collect_city';
+            }
             break;
           }
         }
@@ -258,8 +304,26 @@ export async function POST(request: NextRequest) {
             .join(' ');
 
           if (wantsBooking) {
-            reply = `${reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
-            newState = 'collect_city';
+            // 自动用档案中的地区
+            if (session.userProfile.region) {
+              session.userCity = session.userProfile.region;
+              hospitals = await recommendHospitals(session.condition, session.userCity);
+              session.recommendedHospitals = hospitals;
+              if (hospitals.length > 0) {
+                reply = `${reason}\n\n为您找到了${session.userCity}的以下优质医院：\n\n`;
+                hospitals.forEach((h, i) => {
+                  reply += `${i + 1}. ${h.name}\n   ⭐ ${h.rating}分 · ${h.address}\n   🕐 ${h.hours}\n   📞 ${h.phone}\n   💡 ${h.description}\n\n`;
+                });
+                reply += '请问您想选择哪家医院？回复序号（1/2/3）即可。';
+                newState = 'recommend_hospital';
+              } else {
+                reply = `${reason}\n\n抱歉，暂时没有找到${session.userCity}的匹配医院数据。`;
+                newState = 'post_triage';
+              }
+            } else {
+              reply = `${reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
+              newState = 'collect_city';
+            }
           } else {
             reply = reason;
             newState = 'post_triage';
@@ -290,8 +354,26 @@ export async function POST(request: NextRequest) {
         const wantsBooking = bookingKeywords.some((k) => message.includes(k));
 
         if (wantsBooking && !isDenied) {
-          reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
-          newState = 'collect_city';
+          // 自动用档案中的地区，跳过询问
+          if (session.userProfile.region) {
+            session.userCity = session.userProfile.region;
+            hospitals = await recommendHospitals(session.condition, session.userCity);
+            session.recommendedHospitals = hospitals;
+            if (hospitals.length > 0) {
+              reply = `为您找到了${session.userCity}的以下优质医院：\n\n`;
+              hospitals.forEach((h, i) => {
+                reply += `${i + 1}. ${h.name}\n   ⭐ ${h.rating}分 · ${h.address}\n   🕐 ${h.hours}\n   📞 ${h.phone}\n   💡 ${h.description}\n\n`;
+              });
+              reply += '请问您想选择哪家医院？回复序号（1/2/3）即可。';
+              newState = 'recommend_hospital';
+            } else {
+              reply = `抱歉，暂时没有找到${session.userCity}的匹配医院数据。您可以换个城市试试。`;
+              newState = 'triage';
+            }
+          } else {
+            reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
+            newState = 'collect_city';
+          }
         } else if (isDenied) {
           reply = '好的，有需要随时找我。祝您早日康复！';
           newState = 'triage';
@@ -327,8 +409,21 @@ export async function POST(request: NextRequest) {
           if (idx < session.recommendedHospitals.length) {
             session.selectedHospital = session.recommendedHospitals[idx];
             session.appointment.hospital_name = session.selectedHospital.name;
-            reply = `好的，您选择了${session.selectedHospital.name}。\n请问您怎么称呼？`;
-            newState = 'collect_name';
+
+            // 自动用档案信息，跳过收集步骤
+            const pName = session.userProfile.nickname || session.userProfile.name || '';
+            const pPhone = session.userProfile.phone || '';
+
+            if (pName && pPhone) {
+              session.appointment.name = pName;
+              session.appointment.phone = pPhone;
+              session.appointment.service_type = session.condition || '综合检查';
+              reply = `好的，已为您选择${session.selectedHospital.name}。\n\n为您确认预约信息：\n🏥 ${session.selectedHospital.name}\n👤 ${pName}\n📞 ${pPhone}\n🦷 ${session.appointment.service_type}\n\n请问您希望什么时间就诊？（例如：6月10日下午3点）`;
+              newState = 'collect_time';
+            } else {
+              reply = `好的，您选择了${session.selectedHospital.name}。\n请问您怎么称呼？`;
+              newState = 'collect_name';
+            }
           } else {
             reply = '请输入有效的序号（1/2/3）。';
           }
@@ -339,10 +434,17 @@ export async function POST(request: NextRequest) {
       }
 
       // ================================================================
-      // 收集城市
+      // 收集城市 — 自动从档案获取
       // ================================================================
       case 'collect_city': {
-        session.userCity = message.trim();
+        // 自动用档案中的地区
+        const profileCity = session.userProfile.region || '';
+        if (profileCity && !session.userCity) {
+          session.userCity = profileCity;
+        } else {
+          session.userCity = message.trim();
+        }
+
         hospitals = await recommendHospitals(session.condition, session.userCity);
         session.recommendedHospitals = hospitals;
 
@@ -361,15 +463,23 @@ export async function POST(request: NextRequest) {
       }
 
       // ================================================================
-      // 收集姓名
+      // 收集姓名 — 自动从档案获取，已有则跳到确认
       // ================================================================
       case 'collect_name': {
-        const phoneInName = message.match(/\b1\d{10}\b/);
-        if (phoneInName) {
-          session.appointment.name = message.replace(phoneInName[0], '').trim() || '患者';
-          session.appointment.phone = phoneInName[0];
-          reply = `好的${session.appointment.name}，电话${phoneInName[0]}。\n请问您希望什么时间就诊？（例如：6月10日下午3点）`;
+        const profileName = session.userProfile.nickname || session.userProfile.name || '';
+        const profilePhone = session.userProfile.phone || '';
+
+        if (profileName && profilePhone) {
+          // 档案信息齐全，直接进确认
+          session.appointment.name = profileName;
+          session.appointment.phone = profilePhone;
+          session.appointment.service_type = session.condition || '综合检查';
+          reply = `好的，为您确认预约信息：\n\n🏥 ${session.appointment.hospital_name || '待定'}\n👤 ${session.appointment.name}\n📞 ${session.appointment.phone}\n🦷 ${session.appointment.service_type}\n\n请问您希望什么时间就诊？（例如：6月10日下午3点）`;
           newState = 'collect_time';
+        } else if (profileName) {
+          session.appointment.name = profileName;
+          reply = `好的${profileName}，请留下您的手机号，方便医院联系您：`;
+          newState = 'collect_phone';
         } else {
           session.appointment.name = message.trim();
           reply = `好的${message.trim()}，请留下您的手机号，方便医院联系您：`;
@@ -379,17 +489,23 @@ export async function POST(request: NextRequest) {
       }
 
       // ================================================================
-      // 收集电话
+      // 收集电话 — 自动从档案获取
       // ================================================================
       case 'collect_phone': {
-        const phoneMatch = message.match(/\b1\d{10}\b/);
-        if (phoneMatch) {
-          session.appointment.phone = phoneMatch[0];
-          reply = '收到！请问您希望什么时间就诊？（例如：6月10日下午3点）';
-          newState = 'collect_time';
+        const pPhone = session.userProfile.phone || '';
+        if (pPhone) {
+          session.appointment.phone = pPhone;
         } else {
-          reply = await generateClarifyingQuestion({ phone: true });
+          const phoneMatch = message.match(/\b1\d{10}\b/);
+          if (phoneMatch) {
+            session.appointment.phone = phoneMatch[0];
+          } else {
+            reply = await generateClarifyingQuestion({ phone: true });
+            break;
+          }
         }
+        reply = '收到！请问您希望什么时间就诊？（例如：6月10日下午3点）';
+        newState = 'collect_time';
         break;
       }
 
