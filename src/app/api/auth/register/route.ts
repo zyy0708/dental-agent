@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createUser, findUserByUsername, signToken } from '@/lib/auth';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,6 +8,16 @@ export async function POST(request: NextRequest) {
 
     if (!username || !password) {
       return NextResponse.json({ error: '用户名和密码不能为空' }, { status: 400 });
+    }
+
+    // Rate limit by IP
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rl = rateLimit(`register:${ip}`, 5, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `注册尝试过于频繁，请 ${Math.ceil(rl.retryAfterMs / 1000)} 秒后重试` },
+        { status: 429 }
+      );
     }
 
     if (username.length < 3 || username.length > 20) {
