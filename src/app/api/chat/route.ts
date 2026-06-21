@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { compressContext, detectUserIntent, generateClarifyingQuestion } from '@/lib/sub-agent';
 
 // 导诊状态
-type ChatState = 'triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
+type ChatState = 'triage' | 'post_triage' | 'collect_city' | 'recommend_hospital' | 'collect_name' | 'collect_phone' | 'collect_time';
 
 interface Hospital {
   id: number;
@@ -57,52 +57,41 @@ function cleanExpiredSessions() {
 }
 
 // AI 导诊助手 系统提示词
-const TRIAGE_PROMPT = `你是 Dental Agent 的“口腔健康导诊与预约助手”。你不是医生，不能诊断疾病、不能开药、不能提供治疗方案，也不能承诺疗效。
+const TRIAGE_PROMPT = `你是 Dental Agent 的"口腔健康导诊助手"。你不是医生，不能诊断疾病、不能开药、不能提供治疗方案，也不能承诺疗效。
 
-你的任务只有三件事：
-1. 帮用户判断应该看哪个科室。
-2. 在安全的前提下推进预约。
-3. 发现紧急风险时立即停止预约并提醒急诊。
+你的核心任务是：先帮用户分析症状、给出建议，再在合适的时候引导预约。
+
+流程：
+1. 用户描述症状后，先分析可能的原因，给出实用建议（比如注意事项、缓解方法）。
+2. 告诉用户可能需要看哪个科室，以及为什么。
+3. 不要一上来就问要不要预约，先让用户觉得你真的在帮他分析。
+4. 用户追问或表达想看诊的意愿时，再自然地引导预约。
 
 硬性规则：
 - 不要编造医院、医生、评分、地址、电话、营业时间。
 - 医院推荐只能来自系统数据库返回的数据。
-- 不要推荐具体医院或医生名字，医院推荐由系统自动完成。
+- 不要推荐具体医院或医生名字。
 - 不要索取与预约无关的敏感信息，如身份证、银行卡、精确住址。
 - 用户拒绝预约时，立刻停止推进预约流程。
 - 用户只是在咨询知识时，不要强行索要手机号。
 - 用户出现高风险症状时，不继续收集预约信息。
 
-紧急症状：
-- 胸痛
-- 呼吸困难
-- 大出血
-- 昏迷
-- 抽搐
-- 严重过敏
-- 持续高热
-- 严重外伤
+紧急症状：胸痛、呼吸困难、大出血、昏迷、抽搐、严重过敏、持续高热、严重外伤。
+如果命中紧急症状，直接提醒去急诊，不能继续牙科预约。
 
-如果命中紧急症状，必须直接提醒用户去急诊或拨打当地急救电话，不能继续牙科预约。
+回复格式：
+先用自然语言分析症状、给建议（1-3句话）。
+然后在最后一行加上科室标签，格式为 [DEPARTMENT:科室名]。
+如果信息不足，标签写 [DEPARTMENT:全科医学科]。
 
-普通口腔问题可以导向以下范围：
-- 牙痛、牙龈出血、牙齿松动、龋齿、洗牙、补牙、拔牙、种植、正畸、牙周问题、口腔溃疡、贴面、美白。
+示例：
+用户：我牙疼了两天了，吃东西就疼
+你：牙疼持续两天而且吃东西加重，可能是龋齿或者牙髓发炎了。这两天先吃软一点的食物，避免过冷过热的刺激，尽早去检查一下比较好，拖久了容易加重。[DEPARTMENT:口腔科]
 
-非口腔问题只给出科室方向，不要强行推进牙科预约。
+用户：我牙龈出血
+你：牙龈出血常见原因是牙龈炎或者牙周问题，也可能跟刷牙太用力有关。可以先用软毛牙刷，饭后漱口。如果经常出血，建议去口腔科看看，洗牙和牙周检查可以帮助找到原因。[DEPARTMENT:口腔科]
 
-回复要求：
-- 导诊阶段必须输出严格 JSON，不要夹带任何额外文字。
-- 语气自然、简洁、克制。
-- 默认使用当前界面语言；若无法判断，使用中文。
-
-JSON 结构：
-{"department":"科室名","confidence":0.85,"reason":"简短理由","emergency":false}
-
-紧急情况：
-{"department":"急诊科","confidence":0.99,"reason":"简短说明紧急原因","emergency":true}
-
-信息不足时：
-{"department":"全科医学科","confidence":0.5,"reason":"症状信息不够，建议补充描述或就近咨询全科医生","emergency":false}`;
+紧急情况：[DEPARTMENT:急诊科]`;
 
 /** 症状关键词 → 口腔专科映射 */
 function mapConditionToSpecialties(condition: string): string[] {
@@ -200,14 +189,14 @@ export async function POST(request: NextRequest) {
     switch (session.state) {
 
       // ================================================================
-      // 导诊阶段 — AI 分析症状 → JSON 输出科室推荐
+      // 导诊阶段 — AI 分析症状，自然语言回复 + 科室标签
       // ================================================================
       case 'triage': {
         // 检测是否有预约/看诊意向
         const bookingKeywords = [
           '预约', '挂号', '看诊', '面诊', '去医院', '想去看',
           '推荐医院', '哪家医院', '哪个医院', '去哪看', '怎么预约',
-          '有医院', '找医院', '附近',
+          '有医院', '找医院', '附近', '帮我约', '帮我挂',
         ];
         const wantsBooking = bookingKeywords.some((k) => message.includes(k));
 
@@ -217,7 +206,7 @@ export async function POST(request: NextRequest) {
           const isDenied = denied.some((k) => message.includes(k));
           if (isDenied) break;
 
-          const positiveKeywords = ['好', '嗯', '要', '可以', '行', '是的', '对', 'ok', '好的', '推荐', '看看', '去吧'];
+          const positiveKeywords = ['好', '嗯', '要', '可以', '行', '是的', '对', 'ok', '好的', '推荐', '看看', '去吧', '约'];
           const isPositive = positiveKeywords.some((k) => message.includes(k)) || wantsBooking;
           if (isPositive) {
             reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
@@ -226,12 +215,10 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 调用 AI 导诊（OpenAI SDK）
+        // 调用 AI 导诊
         let rawContent = '';
         try {
-          // 使用子代理压缩上下文（当消息过多时）
           const compressedMessages = await compressContext(session.messages, 8);
-
           const completion = await openai.chat.completions.create({
             model: MODEL,
             messages: [
@@ -249,63 +236,83 @@ export async function POST(request: NextRequest) {
           break;
         }
 
-        // 从响应中提取 JSON（AI 可能在 JSON 前后添加文字）
-        const firstBrace = rawContent.indexOf('{');
-        const lastBrace = rawContent.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          rawContent = rawContent.slice(firstBrace, lastBrace + 1);
-        }
+        // 提取 [DEPARTMENT:xxx] 标签
+        const deptMatch = rawContent.match(/\[DEPARTMENT:(.+?)\]/);
+        const department = deptMatch ? deptMatch[1].trim() : '全科医学科';
+        const isEmergency = department === '急诊科';
+        const reason = rawContent.replace(/\[DEPARTMENT:.+?\]/, '').trim();
 
-        let triage: TriageResult;
-        try {
-          triage = JSON.parse(rawContent);
-        } catch {
-          reply = '您能再详细描述一下症状吗？比如哪里不舒服、持续多久了？';
-          break;
-        }
-
-        // 验证返回结构
-        if (!triage.department || typeof triage.emergency !== 'boolean') {
-          reply = '您能再详细描述一下症状吗？比如哪里不舒服、持续多久了？';
-          break;
-        }
-
-        session.triageResult = triage;
+        session.triageResult = { department, confidence: 0.85, reason, emergency: isEmergency };
 
         // 🚨 紧急情况
-        if (triage.emergency) {
-          reply = `⚠️ ${triage.reason}`;
+        if (isEmergency) {
+          reply = reason || `⚠️ 您的情况可能比较紧急，建议尽快前往急诊科就诊。`;
           break;
         }
 
-        // 非紧急情况 — 根据科室路由
-        if (triage.department === '口腔科') {
+        // 非紧急情况 — 回复分析内容，进入 post_triage 等待用户后续意图
+        if (department === '口腔科') {
           session.condition = session.messages
             .filter((m) => m.role === 'user')
             .map((m) => m.content)
             .join(' ');
 
           if (wantsBooking) {
-            reply = `${triage.reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
+            reply = `${reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
             newState = 'collect_city';
           } else {
-            const intent = await detectUserIntent(message, session.condition);
-            if (intent.intent === 'booking_intent' && intent.confidence > 0.6) {
-              reply = `${triage.reason}\n\n请问您在哪个城市？我为您推荐附近的口腔医院。`;
-              newState = 'collect_city';
-            } else {
-              reply = `${triage.reason}\n\n需要我为您推荐附近的口腔医院进行预约吗？`;
-            }
+            reply = reason;
+            newState = 'post_triage';
           }
-        } else if (triage.department === '全科医学科' && triage.confidence < 0.6) {
-          const intent = await detectUserIntent(message, session.messages.map(m => m.content).join(' '));
-          if (intent.intent === 'symptom_report' && intent.confidence > 0.6) {
-            reply = triage.reason;
-          } else {
-            reply = `${triage.reason}\n\n由于本系统专注于口腔诊疗服务，建议您前往附近综合医院的相关科室就诊。如需口腔相关帮助，请随时告诉我。`;
-          }
+        } else if (department === '全科医学科') {
+          reply = reason || '症状信息还不够充分，建议您补充更多细节，或者先去附近的全科门诊咨询一下。';
+          newState = 'post_triage';
         } else {
-          reply = `${triage.reason}\n\n由于本系统专注于口腔诊疗服务，建议您前往附近综合医院的相关科室就诊。如需口腔相关帮助，请随时告诉我。`;
+          reply = `${reason}\n\n由于本系统专注于口腔诊疗服务，建议您前往附近综合医院的相关科室就诊。如需口腔相关帮助，请随时告诉我。`;
+          newState = 'post_triage';
+        }
+        break;
+      }
+
+      // ================================================================
+      // 导诊后讨论阶段 — 用户可以追问或表达预约意向
+      // ================================================================
+      case 'post_triage': {
+        const denied = ['不', '没', '别', '不用', '不要', '不需要', '不了', '算了', '再说'];
+        const isDenied = denied.some((k) => message.includes(k));
+
+        const bookingKeywords = [
+          '预约', '挂号', '看诊', '面诊', '去医院', '想去看',
+          '推荐医院', '哪家医院', '哪个医院', '去哪看', '怎么预约',
+          '有医院', '找医院', '附近', '帮我约', '帮我挂', '约',
+          '好', '行', '可以', '去吧', '看看', '推荐',
+        ];
+        const wantsBooking = bookingKeywords.some((k) => message.includes(k));
+
+        if (wantsBooking && !isDenied) {
+          reply = '请问您在哪个城市？我为您推荐附近的口腔医院。';
+          newState = 'collect_city';
+        } else if (isDenied) {
+          reply = '好的，有需要随时找我。祝您早日康复！';
+          newState = 'triage';
+        } else {
+          // 用户追问其他问题，继续用 AI 回复
+          try {
+            const compressedMessages = await compressContext(session.messages, 6);
+            const followUpPrompt = `你是口腔健康导诊助手。用户在之前的对话中已经得到了科室分析，现在在追问。请用自然、友善的语气回答，给出实用建议。不要重复之前的分析。如果用户的问题超出你的能力范围，建议他咨询医生。不要强行推销预约。`;
+            const completion = await openai.chat.completions.create({
+              model: MODEL,
+              messages: [
+                { role: 'system', content: followUpPrompt },
+                ...compressedMessages,
+              ],
+              max_tokens: 300,
+              temperature: 0.4,
+            });
+            reply = completion.choices[0]?.message?.content || '您可以继续问我关于口腔健康的问题。';
+          } catch {
+            reply = '您可以继续问我关于口腔健康的问题。';
+          }
         }
         break;
       }
