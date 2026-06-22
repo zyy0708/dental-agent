@@ -4,10 +4,23 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 // ========== 类型定义 ==========
+interface AgentStep {
+  tool: string;
+  input?: any;
+  result_summary: string;
+  duration_ms: number;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   time?: string;
+  agent_metadata?: {
+    intent_label?: string;
+    agent_steps?: AgentStep[];
+  };
+  rating?: number;
+  rated?: boolean;
 }
 
 interface User {
@@ -121,6 +134,49 @@ const i18n: Record<Lang, any> = {
   },
 };
 
+function toolIcon(tool: string): string {
+  const icons: Record<string, string> = {
+    query_hospitals: '🏥',
+    get_user_profile: '👤',
+    create_appointment: '📅',
+    analyze_intent: '🧠',
+    answer_medical_question: '💡',
+  };
+  return icons[tool] || '🔧';
+}
+
+function toolName(tool: string): string {
+  const names: Record<string, string> = {
+    query_hospitals: '查询医院',
+    get_user_profile: '获取用户信息',
+    create_appointment: '创建预约',
+    analyze_intent: '意图分析',
+    answer_medical_question: '医疗问答',
+  };
+  return names[tool] || tool;
+}
+
+function intentBadgeClass(label: string): string {
+  const classes: Record<string, string> = {
+    Triage: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    Booking: 'bg-blue-50 text-blue-700 border-blue-200',
+    Info: 'bg-slate-50 text-slate-600 border-slate-200',
+    Emergency: 'bg-red-50 text-red-700 border-red-200',
+  };
+  return (classes[label] || 'bg-slate-50 text-slate-500 border-slate-200')
+    + ' inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border mb-1.5';
+}
+
+function intentBadgeText(label: string): string {
+  const texts: Record<string, string> = {
+    Triage: '🏥 Triage',
+    Booking: '📋 Booking',
+    Info: 'ℹ️ Info',
+    Emergency: '⚠️ Emergency',
+  };
+  return texts[label] || label;
+}
+
 export default function Home() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -128,6 +184,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeNav, setActiveNav] = useState<NavKey>('chat');
@@ -138,8 +195,23 @@ export default function Home() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
 
+  // 提醒相关状态
+  const [reminders, setReminders] = useState<any[]>([]);
+  const [remindersLoading, setRemindersLoading] = useState(false);
+
   // 统计相关状态
   const chatCount = messages.filter(m => m.role === 'user').length;
+  
+  // 新增：护齿数据统计状态
+  const [healthStats, setHealthStats] = useState({
+    totalChats: 0,
+    totalAppointments: 0,
+    healthScore: 0,
+    activeDays: 0,
+    lastLoginAt: null as string | null,
+    firstLoginAt: null as string | null,
+  });
+  const [statsLoading, setStatsLoading] = useState(false);
 
   // 修改密码弹窗
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -153,6 +225,12 @@ export default function Home() {
   const [sessionId, setSessionId] = useState(() => `sess_${crypto.randomUUID().slice(0, 8)}`);
   const [hospitals, setHospitals] = useState<any[] | null>(null);
   const [sessions, setSessions] = useState<any[]>([]);
+
+  // 档案编辑状态
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState<any>({});
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState('');
 
   const t = i18n[lang];
 
@@ -182,10 +260,69 @@ export default function Home() {
         if (res.ok) return res.json();
         throw new Error('未登录');
       })
-      .then(data => setUser(data.user))
+      .then(data => {
+        setUser(data.user);
+        setProfile(data.user);
+      })
       .catch(() => router.push('/login?callback=/chat'))
       .finally(() => setAuthLoading(false));
   }, [router]);
+
+  const fetchProfile = () => {
+    fetch('/api/auth/me')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.user) { setUser(data.user); setProfile(data.user); }
+      })
+      .catch(() => {});
+  };
+
+  // 加载护齿统计数据
+  const fetchHealthStats = useCallback(async () => {
+    if (!user) return;
+    setStatsLoading(true);
+    try {
+      const res = await fetch('/api/user/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setHealthStats(data.stats);
+      }
+    } catch {
+      // 失败时保持默认值
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [user]);
+
+  const saveProfile = async () => {
+    setProfileSaving(true);
+    setProfileSuccess('');
+    try {
+      const res = await fetch('/api/auth/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileForm),
+      });
+      if (res.ok) {
+        setProfileSuccess('保存成功');
+        setEditingProfile(false);
+        fetchProfile();
+      } else {
+        const d = await res.json();
+        setProfileSuccess('保存失败: ' + (d.error || ''));
+      }
+    } catch {
+      setProfileSuccess('保存失败');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const openProfileEdit = () => {
+    setProfileForm({ ...profile });
+    setEditingProfile(true);
+    setProfileSuccess('');
+  };
 
   // ========== 加载会话列表和活跃会话消息 ==========
   const loadSessions = useCallback(() => {
@@ -208,6 +345,7 @@ export default function Home() {
             role: m.role,
             content: m.content,
             time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            agent_metadata: m.agent_metadata || undefined,
           })));
         }
       })
@@ -217,7 +355,12 @@ export default function Home() {
   useEffect(() => {
     loadSessions();
     loadMessages(sessionId);
+    fetchReminders();
   }, [user]);
+
+  useEffect(() => {
+    if (activeNav === 'data') fetchHealthStats();
+  }, [activeNav, fetchHealthStats]);
 
   // ========== 自动滚动 ==========
   useEffect(() => {
@@ -251,6 +394,18 @@ export default function Home() {
     setTimeout(() => loadMessages(sid), 0);
   };
 
+  const deleteSession = async (sid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('确定删除此会话？')) return;
+    try {
+      const res = await fetch('/api/chat?sessionId=' + encodeURIComponent(sid), { method: 'DELETE' });
+      if (res.ok) {
+        setSessions(prev => prev.filter(s => s.session_id !== sid));
+        if (sessionId === sid) startNewChat();
+      }
+    } catch {}
+  };
+
   // ========== 获取预约 ==========
   const fetchAppointments = async () => {
     setAppointmentsLoading(true);
@@ -264,6 +419,35 @@ export default function Home() {
       console.error('获取预约失败');
     } finally {
       setAppointmentsLoading(false);
+    }
+  };
+
+  // ========== 获取提醒 ==========
+  const fetchReminders = async () => {
+    setRemindersLoading(true);
+    try {
+      const res = await fetch('/api/reminders');
+      if (res.ok) {
+        const data = await res.json();
+        setReminders(data.reminders || []);
+      }
+    } catch {
+      console.error('获取提醒失败');
+    } finally {
+      setRemindersLoading(false);
+    }
+  };
+
+  const dismissReminder = async (reminderId: number) => {
+    try {
+      await fetch('/api/reminders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reminderId, action: 'dismiss' }),
+      });
+      setReminders(prev => prev.filter(r => r.id !== reminderId));
+    } catch {
+      console.error('关闭提醒失败');
     }
   };
 
@@ -291,7 +475,15 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.reply) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.reply, time: getCurrentTime() }]);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.reply,
+          time: getCurrentTime(),
+          agent_metadata: {
+            intent_label: data.intent_label,
+            agent_steps: data.agent_steps,
+          },
+        }]);
       }
       if (data.hospitals) {
         setHospitals(data.hospitals);
@@ -310,6 +502,31 @@ export default function Home() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  };
+
+  // ========== 评分功能 ==========
+  const rateMessage = async (messageIndex: number, rating: number) => {
+    if (!user || !sessionId) return;
+
+    try {
+      const res = await fetch('/api/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          rating,
+          tags: rating >= 4 ? ['helpful'] : rating <= 2 ? ['needs_improvement'] : [],
+        }),
+      });
+
+      if (res.ok) {
+        setMessages(prev => prev.map((msg, i) => 
+          i === messageIndex ? { ...msg, rating, rated: true } : msg
+        ));
+      }
+    } catch {
+      console.error('评分失败');
     }
   };
 
@@ -388,6 +605,38 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* 提醒区域 */}
+                {reminders.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {reminders.map((reminder) => (
+                      <div
+                        key={reminder.id}
+                        className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 animate-fade-in"
+                      >
+                        <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <span className="material-symbols-outlined text-amber-600 text-sm">
+                            {reminder.reminder_type === 'appointment_1day' ? 'event' :
+                             reminder.reminder_type === 'appointment_2hours' ? 'schedule' :
+                             reminder.reminder_type === 'checkup' ? 'medical_services' :
+                             reminder.reminder_type === 'abandoned_followup' ? 'pending' :
+                             'notifications'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-amber-800">{reminder.title}</p>
+                          <p className="text-[11px] text-amber-700 mt-0.5 whitespace-pre-wrap">{reminder.content}</p>
+                        </div>
+                        <button
+                          onClick={() => dismissReminder(reminder.id)}
+                          className="w-6 h-6 rounded-md hover:bg-amber-100 flex items-center justify-center text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
+                        >
+                          <span className="material-symbols-outlined text-sm">close</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-2.5 md:gap-4 ${msg.role === 'user' ? 'justify-end' : ''} animate-fade-in`}>
                     {msg.role === 'assistant' && (
@@ -396,10 +645,71 @@ export default function Home() {
                       </div>
                     )}
                     <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[85%] md:max-w-[75%]`}>
-                      <div className={`px-4 py-2.5 md:px-5 md:py-3.5 rounded-xl md:rounded-2xl ${msg.role === 'user' ? 'bg-gradient-to-br from-[#1e293b] to-[#334155] text-white rounded-tr-sm shadow-sm' : 'bg-white text-slate-800 rounded-tl-sm ring-1 ring-slate-100 shadow-sm'}`}>
+                      {msg.role === 'assistant' && msg.agent_metadata?.agent_steps && msg.agent_metadata.agent_steps.length > 0 && (
+                        <details className="group mb-2 w-full" open>
+                          <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-400 font-semibold select-none hover:text-slate-600 transition-colors list-none">
+                            <span className="material-symbols-outlined text-sm transition-transform group-open:rotate-0 -rotate-90 text-slate-300">expand_more</span>
+                            <span>🤖 推理过程</span>
+                            <span className="text-slate-300 font-normal">({msg.agent_metadata.agent_steps.length} 步)</span>
+                            <span className="ml-auto text-[10px] text-slate-300 font-normal">
+                              {msg.agent_metadata.agent_steps.reduce((t, s) => t + s.duration_ms, 0) < 1000
+                                ? '<1s'
+                                : (msg.agent_metadata.agent_steps.reduce((t, s) => t + s.duration_ms, 0) / 1000).toFixed(1) + 's'}
+                            </span>
+                          </summary>
+                          <div className="mt-2 ml-2 border-l-2 border-slate-100 pl-3 space-y-2">
+                            {msg.agent_metadata.agent_steps.map((step, si) => (
+                              <div key={si} className="relative flex items-start gap-2 animate-fade-in" style={{ animationDelay: `${si * 80}ms` }}>
+                                <div className="absolute -left-[14px] top-1.5 w-2.5 h-2.5 rounded-full bg-white border-2 border-slate-300 flex-shrink-0" />
+                                <div className="flex-1 min-w-0 bg-slate-50/60 rounded-lg px-2.5 py-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px]">{toolIcon(step.tool)}</span>
+                                    <span className="text-[11px] font-semibold text-slate-700">{toolName(step.tool)}</span>
+                                    <span className={`ml-auto text-[10px] shrink-0 ${step.result_summary.includes('失败') ? 'text-red-400' : step.result_summary.includes('成功') ? 'text-emerald-500' : 'text-slate-400'}`}>
+                                      {step.duration_ms < 1000 ? '<1s' : (step.duration_ms / 1000).toFixed(1) + 's'}
+                                    </span>
+                                  </div>
+                                  <p className={`text-[10px] mt-0.5 leading-relaxed ${step.result_summary.includes('失败') ? 'text-red-400' : 'text-slate-500'}`}>{step.result_summary}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                      <div className={`relative px-4 py-2.5 md:px-5 md:py-3.5 rounded-xl md:rounded-2xl ${msg.role === 'user' ? 'bg-gradient-to-br from-[#1e293b] to-[#334155] text-white rounded-tr-sm shadow-sm' : 'bg-white text-slate-800 rounded-tl-sm ring-1 ring-slate-100 shadow-sm'}`}>
+                        {msg.role === 'assistant' && msg.agent_metadata?.intent_label && (
+                          <span className={intentBadgeClass(msg.agent_metadata.intent_label)}>
+                            {intentBadgeText(msg.agent_metadata.intent_label)}
+                          </span>
+                        )}
                         <p className="whitespace-pre-wrap font-sans text-xs md:text-sm leading-relaxed">{msg.content}</p>
                       </div>
                       {msg.time && <span className="text-[10px] text-slate-400 mt-1 font-medium tracking-tight px-1">{msg.time}</span>}
+                      
+                      {/* Rating buttons for assistant messages */}
+                      {msg.role === 'assistant' && !msg.rated && (
+                        <div className="flex items-center gap-1 mt-1.5 px-1">
+                          <span className="text-[10px] text-slate-400 mr-1">有帮助？</span>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => rateMessage(i, star)}
+                              className="w-5 h-5 flex items-center justify-center text-slate-300 hover:text-amber-400 transition-colors"
+                              title={`${star}星`}
+                            >
+                              <span className="material-symbols-outlined text-sm">star</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {msg.role === 'assistant' && msg.rated && (
+                        <div className="flex items-center gap-1 mt-1.5 px-1">
+                          <span className="text-[10px] text-amber-500 flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-sm">star</span>
+                            已评分 ({msg.rating}星)
+                          </span>
+                        </div>
+                      )}
                     </div>
                     {msg.role === 'user' && (
                       <div className="w-8 h-8 md:w-9 md:h-9 bg-teal-50 rounded-lg md:rounded-xl border border-teal-200 flex items-center justify-center text-teal-700 text-xs font-bold flex-shrink-0 shadow-inner">
@@ -462,11 +772,23 @@ export default function Home() {
                     <div className="w-8 h-8 md:w-9 md:h-9 bg-[#1e293b] rounded-lg md:rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
                       <span className="material-symbols-outlined text-white text-sm ai-pulse">smart_toy</span>
                     </div>
-                    <div className="bg-white/80 backdrop-blur-sm ring-1 ring-white/60 shadow-sm rounded-xl rounded-tl-sm px-4 py-3 flex items-center">
-                      <div className="typing-indicator">
-                        <span></span>
-                        <span></span>
-                        <span></span>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="bg-white/80 backdrop-blur-sm ring-1 ring-white/60 shadow-sm rounded-xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
+                        <div className="typing-indicator">
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-medium ml-1">正在分析您的消息...</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-300 bg-white/60 rounded-lg px-3 py-1.5 ml-1 animate-pulse">
+                        <span>🧠</span>
+                        <span>推理步骤</span>
+                        <span className="flex gap-0.5 ml-1">
+                          <span className="w-1 h-1 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-1 h-1 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-1 h-1 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -557,30 +879,105 @@ export default function Home() {
         return (
           <main className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
             <div className="max-w-2xl mx-auto">
-              <h3 className="text-lg font-bold text-slate-900 mb-6">患者档案</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-slate-900">患者档案</h3>
+                <button onClick={editingProfile ? () => setEditingProfile(false) : openProfileEdit}
+                  className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">{editingProfile ? 'close' : 'edit'}</span>
+                  {editingProfile ? '取消' : '编辑'}
+                </button>
+              </div>
+
               <div className="bento-card overflow-hidden !p-0">
                 <div className="bg-[#1e293b] px-6 py-8 text-center">
                   <div className="w-20 h-20 bg-teal-500/20 rounded-2xl flex items-center justify-center text-teal-400 text-3xl font-bold mx-auto mb-3 border-4 border-white/20 shadow-lg">
-                    {(user?.nickname || user?.username || '?')[0]}
+                    {(profile?.nickname || profile?.username || '?')[0]}
                   </div>
-                  <h4 className="text-white text-lg font-bold">{user?.nickname || user?.username}</h4>
-                  <p className="text-slate-400 text-xs mt-1">@{user?.username}</p>
+                  <h4 className="text-white text-lg font-bold">{profile?.nickname || profile?.username}</h4>
+                  <p className="text-slate-400 text-xs mt-1">@{profile?.username}</p>
                 </div>
-                <div className="p-6 space-y-4">
-                  {[
-                    { label: '用户名', value: user?.username || '-' },
-                    { label: '昵称', value: user?.nickname || '-' },
-                    { label: '会话ID', value: sessionId },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between py-2 border-b border-slate-50">
-                      <span className="text-xs text-slate-500 font-medium">{item.label}</span>
-                      <span className="text-sm text-slate-800 font-semibold">{item.value}</span>
+
+                {editingProfile ? (
+                  <div className="p-6 space-y-3">
+                    {[
+                      { key: 'nickname', label: '昵称', type: 'text' },
+                      { key: 'phone', label: '手机号', type: 'text' },
+                      { key: 'email', label: '邮箱', type: 'email' },
+                      { key: 'age', label: '年龄', type: 'number' },
+                      { key: 'gender', label: '性别', type: 'select', options: ['', '男', '女'] },
+                      { key: 'height', label: '身高(cm)', type: 'number' },
+                      { key: 'weight', label: '体重(kg)', type: 'number' },
+                      { key: 'region', label: '地区', type: 'text' },
+                      { key: 'address', label: '地址', type: 'text' },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label className="text-[11px] font-semibold text-slate-500 mb-1 block">{f.label}</label>
+                        {f.type === 'select' ? (
+                          <select value={profileForm[f.key] || ''} onChange={e => setProfileForm({ ...profileForm, [f.key]: e.target.value })}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-300 outline-none">
+                            {f.options!.map(o => <option key={o} value={o}>{o || '未设置'}</option>)}
+                          </select>
+                        ) : (
+                          <input type={f.type} value={profileForm[f.key] || ''} onChange={e => setProfileForm({ ...profileForm, [f.key]: e.target.value })}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-300 outline-none" />
+                        )}
+                      </div>
+                    ))}
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 mb-1 block">病史</label>
+                      <textarea value={profileForm.medical_history || ''} onChange={e => setProfileForm({ ...profileForm, medical_history: e.target.value })}
+                        rows={3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-300 outline-none resize-none" />
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-4 bg-sky-50 border border-sky-100 rounded-xl p-4 text-center">
-                <p className="text-xs text-sky-700 font-medium">💡 完善个人信息有助于我们提供更精准的牙科建议</p>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 mb-1 block">过敏史</label>
+                      <textarea value={profileForm.allergies || ''} onChange={e => setProfileForm({ ...profileForm, allergies: e.target.value })}
+                        rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-300 outline-none resize-none" />
+                    </div>
+                    {profileSuccess && <p className={`text-xs font-medium ${profileSuccess.includes('成功') ? 'text-emerald-600' : 'text-red-500'}`}>{profileSuccess}</p>}
+                    <button onClick={saveProfile} disabled={profileSaving}
+                      className="btn-primary w-full py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">
+                      {profileSaving ? '保存中...' : '保存档案'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-6">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                      {[
+                        { label: '用户名', value: profile?.username },
+                        { label: '昵称', value: profile?.nickname },
+                        { label: '手机号', value: profile?.phone },
+                        { label: '邮箱', value: profile?.email },
+                        { label: '年龄', value: profile?.age },
+                        { label: '性别', value: profile?.gender || '-' },
+                        { label: '身高', value: profile?.height ? profile.height + ' cm' : '-' },
+                        { label: '体重', value: profile?.weight ? profile.weight + ' kg' : '-' },
+                        { label: '地区', value: profile?.region },
+                        { label: '地址', value: profile?.address },
+                      ].map(item => (
+                        <div key={item.label} className="py-2 border-b border-slate-50">
+                          <span className="text-[10px] text-slate-400 font-medium block mb-0.5">{item.label}</span>
+                          <span className="text-sm text-slate-800 font-semibold">{item.value || '-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {(profile?.medical_history || profile?.allergies) && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                        {profile?.medical_history && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-medium block mb-1">病史</span>
+                            <p className="text-sm text-slate-700 bg-amber-50 rounded-lg px-3 py-2">{profile.medical_history}</p>
+                          </div>
+                        )}
+                        {profile?.allergies && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-medium block mb-1">过敏史</span>
+                            <p className="text-sm text-slate-700 bg-red-50 rounded-lg px-3 py-2">{profile.allergies}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </main>
@@ -591,13 +988,21 @@ export default function Home() {
         return (
           <main className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
             <div className="max-w-2xl mx-auto">
-              <h3 className="text-lg font-bold text-slate-900 mb-6">护齿数据</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-slate-900">护齿数据</h3>
+                {statsLoading && (
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-xs animate-spin">sync</span>
+                    加载中
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-4 mb-6">
                 {[
-                  { label: '咨询次数', value: chatCount, icon: 'chat', color: 'bg-teal-50 text-teal-600' },
-                  { label: '预约数量', value: appointments.length, icon: 'calendar_today', color: 'bg-blue-50 text-blue-600' },
-                  { label: '健康评分', value: '85', icon: 'favorite', color: 'bg-rose-50 text-rose-600' },
-                  { label: '活跃天数', value: '1', icon: 'today', color: 'bg-amber-50 text-amber-600' },
+                  { label: '咨询次数', value: statsLoading ? '...' : healthStats.totalChats, icon: 'chat', color: 'bg-teal-50 text-teal-600' },
+                  { label: '预约数量', value: statsLoading ? '...' : healthStats.totalAppointments, icon: 'calendar_today', color: 'bg-blue-50 text-blue-600' },
+                  { label: '健康评分', value: statsLoading ? '...' : healthStats.healthScore, icon: 'favorite', color: 'bg-rose-50 text-rose-600' },
+                  { label: '活跃天数', value: statsLoading ? '...' : healthStats.activeDays, icon: 'today', color: 'bg-amber-50 text-amber-600' },
                 ].map((item) => (
                   <div key={item.label} className="bento-card !p-4">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${item.color}`}>
@@ -614,12 +1019,12 @@ export default function Home() {
                   护齿小贴士
                 </h4>
                 <div className="space-y-3">
-                  {[
-                    '每天刷牙至少两次，每次不少于2分钟',
-                    '使用牙线清洁牙缝，预防牙周病',
-                    '每半年进行一次专业洁牙检查',
-                    '减少含糖食物摄入，保护牙釉质',
-                  ].map((tip, i) => (
+                  {(healthStats.healthScore < 50
+                    ? ['建议尽快进行口腔检查，及早发现问题', '每天使用含氟牙膏刷牙两次', '减少甜食和碳酸饮料的摄入', '刷牙后使用漱口水辅助清洁']
+                    : healthStats.healthScore < 80
+                    ? ['保持每天刷牙两次的好习惯', '使用牙线清洁牙缝，预防牙周病', '每半年进行一次专业洁牙检查', '减少含糖食物摄入，保护牙釉质']
+                    : ['继续保持良好的口腔护理习惯', '定期使用牙线和水牙线深层清洁', '每年进行至少一次专业口腔检查', '均衡饮食，多摄入钙质和维生素']
+                  ).map((tip, i) => (
                     <div key={i} className="flex items-start gap-3 text-sm text-slate-600">
                       <span className="w-5 h-5 bg-teal-50 rounded-full flex items-center justify-center text-[10px] text-teal-600 font-bold flex-shrink-0 mt-0.5">{i + 1}</span>
                       <span>{tip}</span>
@@ -811,18 +1216,24 @@ export default function Home() {
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3.5 mb-2">历史会话</p>
               <div className="space-y-0.5">
                 {sessions.map((s: any) => (
-                  <button
-                    key={s.session_id}
-                    onClick={() => switchSession(s.session_id)}
-                    className={`w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all text-left ${
-                      sessionId === s.session_id
-                        ? 'bg-teal-500/20 text-teal-400'
-                        : 'text-slate-400 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm flex-shrink-0">chat_bubble</span>
-                    <span className="truncate">{s.first_msg || (lang === 'en' ? 'New chat' : lang === 'ja' ? '新しい会話' : '新对话')}</span>
-                  </button>
+                  <div key={s.session_id} className="flex items-center gap-0 group">
+                    <button
+                      onClick={() => switchSession(s.session_id)}
+                      className={`flex-1 flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all text-left ${
+                        sessionId === s.session_id
+                          ? 'bg-teal-500/20 text-teal-400'
+                          : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm flex-shrink-0">chat_bubble</span>
+                      <span className="truncate">{s.first_msg || (lang === 'en' ? 'New chat' : lang === 'ja' ? '新しい会話' : '新对话')}</span>
+                    </button>
+                    <button onClick={e => deleteSession(s.session_id, e)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      title="删除会话">
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

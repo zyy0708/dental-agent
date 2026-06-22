@@ -222,6 +222,16 @@ export default function AdminPage() {
     finally { setUpdatingId(null); }
   };
 
+  const deleteAppointment = async (id: string) => {
+    if (!confirm('确定删除此预约记录？')) return;
+    setUpdatingId(id);
+    try {
+      const r = await fetch('/api/appointment/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      if (r.ok) setAppointments(p => p.filter(a => a.id !== id));
+    } catch { setError(t.refresh); }
+    finally { setUpdatingId(null); }
+  };
+
   const statusBadge = (s: string) => {
     const m: Record<string, { cls: string; label: string }> = {
       pending: { cls: 'badge-pending', label: t.appointments.statusLabels.pending },
@@ -262,6 +272,12 @@ export default function AdminPage() {
   const [savingLead, setSavingLead] = useState(false);
   const [leadSaveError, setLeadSaveError] = useState('');
 
+  // ─── CRM Agent State ───
+  const [leadScore, setLeadScore] = useState<any>(null);
+  const [leadScripts, setLeadScripts] = useState<any[]>([]);
+  const [loadingScore, setLoadingScore] = useState(false);
+  const [loadingScripts, setLoadingScripts] = useState(false);
+
   const openLeadModal = (lead: Lead) => {
     setSelectedLead(lead);
     setEditStatus(lead.lead_status);
@@ -269,6 +285,8 @@ export default function AdminPage() {
     setEditFollowUp(lead.next_follow_up_at ? lead.next_follow_up_at.slice(0, 16) : '');
     setEditDeal(lead.deal_amount !== null ? String(lead.deal_amount) : '');
     setLeadSaveError('');
+    setLeadScore(null);
+    setLeadScripts([]);
   };
 
   const closeLeadModal = () => {
@@ -299,6 +317,70 @@ export default function AdminPage() {
       } else { setLeadSaveError(t.leads.modal.saveError); }
     } catch { setLeadSaveError(t.leads.modal.saveError); }
     finally { setSavingLead(false); }
+  };
+
+  // ─── CRM Agent Functions ───
+  const fetchLeadScore = async (leadId: string) => {
+    setLoadingScore(true);
+    try {
+      // First calculate score
+      await fetch('/api/crm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'score', leadId }),
+      });
+      
+      // Then get the score
+      const res = await fetch(`/api/crm?mode=score&leadId=${leadId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLeadScore(data.score);
+      }
+    } catch {
+      console.error('获取评分失败');
+    } finally {
+      setLoadingScore(false);
+    }
+  };
+
+  const fetchLeadScripts = async (leadId: string) => {
+    setLoadingScripts(true);
+    try {
+      // Generate scripts
+      await fetch('/api/crm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generateScripts', leadId }),
+      });
+      
+      // Get scripts
+      const res = await fetch(`/api/crm?mode=scripts&leadId=${leadId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLeadScripts(data.scripts || []);
+      }
+    } catch {
+      console.error('获取话术失败');
+    } finally {
+      setLoadingScripts(false);
+    }
+  };
+
+  const scoreAllLeads = async () => {
+    try {
+      const res = await fetch('/api/crm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'scoreAll' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`评分完成：成功 ${data.scored} 条，失败 ${data.errors} 条`);
+        fetchAll();
+      }
+    } catch {
+      alert('批量评分失败');
+    }
   };
 
   // ─── Filtered leads ───
@@ -449,6 +531,12 @@ export default function AdminPage() {
                                       className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-md text-[11px] font-semibold border border-red-200 disabled:opacity-50">{t.appointments.cancel}</button>
                                   </div>
                                 )}
+                                {a.status !== 'pending' && (
+                                  <button onClick={() => deleteAppointment(a.id)} disabled={updatingId === a.id}
+                                    className="text-red-400 hover:text-red-600 px-2 py-1 rounded-md text-[11px] font-semibold disabled:opacity-50 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-sm">delete</span>删除
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           );
@@ -480,6 +568,14 @@ export default function AdminPage() {
                               className="flex-1 bg-teal-50 text-teal-700 py-1.5 rounded-md text-[11px] font-semibold border border-teal-200 disabled:opacity-50">{t.appointments.confirm}</button>
                             <button onClick={() => updateStatus(a.id, 'cancelled')} disabled={updatingId === a.id}
                               className="flex-1 bg-red-50 text-red-600 py-1.5 rounded-md text-[11px] font-semibold border border-red-200 disabled:opacity-50">{t.appointments.cancel}</button>
+                          </div>
+                        )}
+                        {a.status !== 'pending' && (
+                          <div className="pt-2 border-t border-slate-100">
+                            <button onClick={() => deleteAppointment(a.id)} disabled={updatingId === a.id}
+                              className="w-full text-red-400 hover:text-red-600 py-1.5 rounded-md text-[11px] font-semibold disabled:opacity-50 flex items-center justify-center gap-1">
+                              <span className="material-symbols-outlined text-sm">delete</span>删除记录
+                            </button>
                           </div>
                         )}
                       </div>
@@ -664,6 +760,121 @@ export default function AdminPage() {
                   <InfoRow icon="calendar_month" label="创建时间" value={formatDateTime(selectedLead.created_at)} />
                   <InfoRow icon="history" label={t.appointments.status} value={formatDateTime(selectedLead.updated_at)} />
                 </div>
+              </div>
+
+              {/* AI Score Section */}
+              <div className="mb-5 pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm text-amber-500">psychology</span>
+                    AI 线索评分
+                  </h4>
+                  <button
+                    onClick={() => fetchLeadScore(selectedLead.id)}
+                    disabled={loadingScore}
+                    className="text-[10px] text-teal-600 hover:text-teal-700 font-semibold flex items-center gap-1"
+                  >
+                    {loadingScore ? (
+                      <span className="material-symbols-outlined text-xs animate-spin">sync</span>
+                    ) : (
+                      <span className="material-symbols-outlined text-xs">refresh</span>
+                    )}
+                    {loadingScore ? '分析中...' : '获取评分'}
+                  </button>
+                </div>
+                
+                {leadScore ? (
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-3 border border-amber-100">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <span className={`text-lg font-bold ${
+                          leadScore.score >= 70 ? 'text-emerald-600' :
+                          leadScore.score >= 40 ? 'text-amber-600' : 'text-red-500'
+                        }`}>{leadScore.score}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[10px] text-slate-500">综合评分</p>
+                        <div className="w-full bg-slate-200 rounded-full h-1.5 mt-1">
+                          <div 
+                            className={`h-1.5 rounded-full ${
+                              leadScore.score >= 70 ? 'bg-emerald-500' :
+                              leadScore.score >= 40 ? 'bg-amber-500' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${leadScore.score}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    {leadScore.ai_suggestion && (
+                      <div className="mt-2 pt-2 border-t border-amber-100">
+                        <p className="text-[10px] text-amber-700">
+                          <span className="font-semibold">AI建议：</span> {leadScore.ai_suggestion}
+                        </p>
+                      </div>
+                    )}
+                    {leadScore.anomaly_flags && leadScore.anomaly_flags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {leadScore.anomaly_flags.map((flag: string, i: number) => (
+                          <span key={i} className="px-2 py-0.5 bg-red-100 text-red-600 rounded-md text-[9px] font-semibold">
+                            {flag === 'duplicate_phone' ? '重复电话' :
+                             flag === 'high_value' ? '高价值' :
+                             flag === 'inactive_lead' ? '不活跃' : flag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-xs text-slate-400">
+                    点击"获取评分"进行AI分析
+                  </div>
+                )}
+              </div>
+
+              {/* AI Follow-up Scripts */}
+              <div className="mb-5 pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm text-blue-500">auto_awesome</span>
+                    AI 跟进话术
+                  </h4>
+                  <button
+                    onClick={() => fetchLeadScripts(selectedLead.id)}
+                    disabled={loadingScripts}
+                    className="text-[10px] text-teal-600 hover:text-teal-700 font-semibold flex items-center gap-1"
+                  >
+                    {loadingScripts ? (
+                      <span className="material-symbols-outlined text-xs animate-spin">sync</span>
+                    ) : (
+                      <span className="material-symbols-outlined text-xs">refresh</span>
+                    )}
+                    {loadingScripts ? '生成中...' : '生成话术'}
+                  </button>
+                </div>
+                
+                {leadScripts.length > 0 ? (
+                  <div className="space-y-2">
+                    {leadScripts.map((script, i) => (
+                      <div key={i} className="bg-blue-50 rounded-lg p-2.5 border border-blue-100">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[10px] font-bold text-blue-700">
+                            {script.script_type === 'initial' ? '初次联系' :
+                             script.script_type === 'reminder' ? '预约提醒' :
+                             script.script_type === 'reengagement' ? '重新激活' :
+                             script.script_type === 'closing' ? '成交跟进' : script.script_type}
+                          </span>
+                          <span className="text-[9px] text-blue-400">•</span>
+                          <span className="text-[9px] text-blue-500">{script.channel}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-700">{script.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-xs text-slate-400">
+                    点击"生成话术"获取AI建议
+                  </div>
+                )}
               </div>
 
               {/* Editable fields */}

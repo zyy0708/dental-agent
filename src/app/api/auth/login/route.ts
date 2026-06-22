@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { findUserByUsername, verifyPassword, signToken, updateLastLogin } from '@/lib/auth';
+import { findUserByUsername, verifyPassword, signToken, updateLastLogin } from '@/services/auth/auth-service';
 import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {

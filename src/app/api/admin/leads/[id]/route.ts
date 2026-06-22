@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser } from '@/services/auth/auth-service';
 import { query } from '@/lib/db';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: '没有需要更新的字段' }, { status: 400 });
     }
 
-    idx++; updates.push(`updated_at = now()`);
+    updates.push(`updated_at = now()`);
 
     idx++; vals.push(id);
     const sql = `UPDATE appointments SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;

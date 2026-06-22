@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -10,17 +10,54 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
+  const [captcha, setCaptcha] = useState('');
+  const [captchaSvg, setCaptchaSvg] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const loadCaptcha = async () => {
+    try {
+      const res = await fetch('/api/captcha');
+      if (res.ok) {
+        const data = await res.json();
+        setCaptchaSvg(data.svg);
+        setCaptcha('');
+        setFieldErrors(f => ({ ...f, captcha: '' }));
+      }
+    } catch {}
+  };
+
+  useEffect(() => { loadCaptcha(); }, []);
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!/^[\u4e00-\u9fa5a-zA-Z0-9]{4,16}$/.test(username)) {
+      errors.username = '用户名需为4-16位字母、数字或中文';
+    }
+    if (password.length < 8) {
+      errors.password = '密码至少需要8个字符';
+    } else if (!/[A-Z]/.test(password)) {
+      errors.password = '密码需要包含大写字母';
+    } else if (!/[a-z]/.test(password)) {
+      errors.password = '密码需要包含小写字母';
+    } else if (!/[0-9]/.test(password)) {
+      errors.password = '密码需要包含数字';
+    }
+    if (password !== confirmPassword) {
+      errors.confirmPassword = '两次输入的密码不一致';
+    }
+    if (!captcha) {
+      errors.captcha = '请输入验证码';
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (password !== confirmPassword) {
-      setError('两次输入的密码不一致');
-      return;
-    }
+    if (!validate()) return;
 
     setLoading(true);
 
@@ -28,19 +65,21 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, nickname: nickname || username }),
+        body: JSON.stringify({ username, password, nickname: nickname || username, captcha }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         setError(data.error || '注册失败');
+        loadCaptcha();
         return;
       }
 
       router.push('/chat');
     } catch {
       setError('网络错误，请稍后重试');
+      loadCaptcha();
     } finally {
       setLoading(false);
     }
@@ -120,13 +159,12 @@ export default function RegisterPage() {
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="3-20个字符"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300 transition-all"
+                onChange={(e) => { setUsername(e.target.value); setFieldErrors(f => ({ ...f, username: '' })); }}
+                placeholder="4-16位字母、数字或中文"
+                className={`w-full bg-white border ${fieldErrors.username ? 'border-red-300 focus:ring-red-200' : 'border-slate-200 focus:ring-teal-200 focus:border-teal-300'} rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 transition-all`}
                 required
-                minLength={3}
-                maxLength={20}
               />
+              {fieldErrors.username && <p className="text-xs text-red-500 mt-1.5 ml-1">{fieldErrors.username}</p>}
             </div>
 
             <div>
@@ -145,12 +183,12 @@ export default function RegisterPage() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="至少6个字符"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300 transition-all"
+                onChange={(e) => { setPassword(e.target.value); setFieldErrors(f => ({ ...f, password: '' })); }}
+                placeholder="至少8位，包含大小写字母和数字"
+                className={`w-full bg-white border ${fieldErrors.password ? 'border-red-300 focus:ring-red-200' : 'border-slate-200 focus:ring-teal-200 focus:border-teal-300'} rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 transition-all`}
                 required
-                minLength={6}
               />
+              {fieldErrors.password && <p className="text-xs text-red-500 mt-1.5 ml-1">{fieldErrors.password}</p>}
             </div>
 
             <div>
@@ -158,11 +196,46 @@ export default function RegisterPage() {
               <input
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => { setConfirmPassword(e.target.value); setFieldErrors(f => ({ ...f, confirmPassword: '' })); }}
                 placeholder="再次输入密码"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300 transition-all"
+                className={`w-full bg-white border ${fieldErrors.confirmPassword ? 'border-red-300 focus:ring-red-200' : 'border-slate-200 focus:ring-teal-200 focus:border-teal-300'} rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 transition-all`}
                 required
               />
+              {fieldErrors.confirmPassword && <p className="text-xs text-red-500 mt-1.5 ml-1">{fieldErrors.confirmPassword}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">验证码</label>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={captcha}
+                  onChange={(e) => { setCaptcha(e.target.value); setFieldErrors(f => ({ ...f, captcha: '' })); }}
+                  placeholder="输入图片中的数字"
+                  maxLength={4}
+                  className={`w-36 bg-white border ${fieldErrors.captcha ? 'border-red-300 focus:ring-red-200' : 'border-slate-200 focus:ring-teal-200 focus:border-teal-300'} rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 transition-all`}
+                  required
+                />
+                {captchaSvg ? (
+                  <button
+                    type="button"
+                    onClick={loadCaptcha}
+                    className="flex-1 flex items-center justify-center bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-teal-300 transition-colors cursor-pointer"
+                    title="点击刷新验证码"
+                    dangerouslySetInnerHTML={{ __html: captchaSvg }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={loadCaptcha}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-400 hover:border-teal-300 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-base">refresh</span>
+                    加载验证码
+                  </button>
+                )}
+              </div>
+              {fieldErrors.captcha && <p className="text-xs text-red-500 mt-1.5 ml-1">{fieldErrors.captcha}</p>}
             </div>
 
             <button

@@ -40,6 +40,14 @@ export async function POST() {
     await query("UPDATE appointments SET updated_at = created_at WHERE updated_at IS NULL");
     await query('CREATE INDEX IF NOT EXISTS idx_appointments_lead_status ON appointments(lead_status)');
 
+    // IP registration limit table
+    await query(`CREATE TABLE IF NOT EXISTS ip_registrations (
+      id SERIAL PRIMARY KEY,
+      ip_address VARCHAR(45) NOT NULL,
+      registered_at TIMESTAMP DEFAULT NOW()
+    )`);
+    await query('CREATE INDEX IF NOT EXISTS idx_ip_reg_ip_date ON ip_registrations(ip_address, registered_at)');
+
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

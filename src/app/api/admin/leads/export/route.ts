@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser } from '@/services/auth/auth-service';
 import { query } from '@/lib/db';
 import ExcelJS from 'exceljs';
 
